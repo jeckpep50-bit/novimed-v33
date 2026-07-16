@@ -1,0 +1,346 @@
+<!-- Novimed V30 | Hardening: XSS en todos los renders, persistencia local, búsqueda real,
+     accesibilidad de modales (Escape + foco), guardas anti-crash, limpieza de código muerto.
+     Base: V29 blindada para presentación. Comportamiento funcional preservado al 100%. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Novimed es una app web para gestión médica escolar: alertas, fichas, vacunas, inventario, familias, reportes y semáforo de riesgo institucional." />
+<meta name="theme-color" content="#06142a" />
+<meta property="og:title" content="Novimed — Centro de bienestar institucional" />
+<meta property="og:description" content="Gestión médica escolar con alertas, trazabilidad, familias conectadas y reportes institucionales." />
+<meta property="og:type" content="website" />
+<title>Novimed V33 — Centro de bienestar institucional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+<a class="skip-link" href="#mainContent">Saltar al contenido principal</a>
+<div class="app">
+  <div class="mobile-overlay" id="mobileOverlay"></div>
+  <aside class="sidebar">
+    <div class="brand"><div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7.5c0 5.7-8 12-8 12s-8-6.3-8-12A4.5 4.5 0 0 1 12 4a4.5 4.5 0 0 1 8 3.5Z"/><path d="m8.5 11 2.2 2.2 5-5"/></svg></div><div><h1>Novimed</h1><span>Protección Inteligente</span></div></div>
+    <div class="tag"><strong>Centro médico escolar</strong><p>Alertas, atenciones, familias y reportes en un solo flujo.</p><div class="mini-kpis"><span>3 alertas</span><span>27 atenciones</span><span>94% lectura</span><span>2m 34s</span></div></div>
+    <nav class="nav" id="nav">
+      <div class="nav-group-label"><span>Operación diaria</span></div>
+      <button type="button" class="active" data-page="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="nav-label">Inicio</span></button>
+      <button type="button" data-page="alertas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nav-label">Centro de alertas</span><span class="pill">3</span></button>
+      <div class="nav-group-label"><span>Gestión estudiantil</span></div>
+      <button type="button" data-page="estudiantes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11l2 2 4-4"/></svg><span class="nav-label">Estudiantes</span></button>
+      <div class="nav-group-label"><span>Recursos y comunicación</span></div>
+      <button type="button" data-page="familias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg><span class="nav-label">Familias</span></button>
+      <button type="button" data-page="reportes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 14v3"/><path d="M12 10v7"/><path d="M17 6v11"/></svg><span class="nav-label">Reportes</span></button>
+      <div class="nav-group-label"><span>Simulación y sistema</span></div>
+      <button type="button" data-page="roles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="nav-label">Roles</span></button>
+      <button type="button" data-page="config"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V22a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="nav-label">Configuración</span></button>
+    </nav>
+    <div class="user"><div class="user-row"><div class="avatar" id="sidebarAvatar">MG</div><div><b id="sidebarName">Andrés Sánchez</b><small id="sidebarRole">Departamento médico</small></div></div><div class="online">En línea</div></div>
+  </aside>
+  <main class="main" id="mainContent" tabindex="-1">
+    <header class="topbar"><button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú" aria-expanded="false" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button><div class="title"><h2 id="pageTitle">Centro de bienestar institucional</h2><p id="pageSub">Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.</p></div><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="searchInput" aria-label="Buscar estudiante, alerta o atención" placeholder="Buscar estudiante, alerta o atención" /></div><button class="bell" id="bell" type="button" aria-label="Ver notificaciones médicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>3</span></button></header>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-icon">!</div><div><b id="toastTitle">Nueva alerta médica</b><p id="toastText">Sofía Martínez — Aula 3B. El centro médico fue notificado.</p></div></div>
+    <section class="content">
+      <section class="page active" id="page-inicio">
+        <section class="home-dashboard" aria-label="Resumen operativo Novimed">
+          <div class="home-intro card">
+            <div>
+              <span class="hero-kicker">Flujo operativo</span>
+              <h1>Sofía Martínez necesita atención</h1>
+              <p>La pantalla inicial concentra lo urgente: alertas activas, atención médica, ficha del estudiante y comunicación con familias.</p>
+            </div>
+            <div class="home-actions">
+              <button type="button" class="btn primary" onclick="showPage('alertas')">Ver alertas</button>
+              <button type="button" class="btn secondary" onclick="showPage('atenciones')">Registrar atención médica</button>
+            </div>
+          </div>
+
+          <div class="kpis ux-kpis">
+            <div class="kpi"><small>Alertas activas</small><strong class="red" id="kpiAlerts">3</strong><em class="red" id="kpiAlertsSub">2 requieren atención</em></div>
+            <div class="kpi"><small>Atenciones hoy</small><strong id="kpiCare">27</strong><em class="green">todas documentadas</em></div>
+            <div class="kpi"><small>Familias informadas</small><strong class="green" id="kpiFamily">94%</strong><em class="green">confirmación registrada</em></div>
+            <div class="kpi"><small>Tiempo respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div>
+          </div>
+
+          <div class="workflow-grid">
+            <article class="card priority-card">
+              <div class="section-head"><h3>Incidente principal</h3><span class="badge red" id="mainBadge">Acción requerida</span></div>
+              <div class="student"><div class="avatar" id="mainStudentAvatar">SM</div><div><h4 id="mainStudentName">Sofía Martínez</h4><p id="mainStudentMeta">3° Secundaria — Aula 3B · 2° piso</p></div></div>
+              <div class="alert-note">Alergia conocida: maní</div>
+              <div class="symptoms"><small>Síntomas reportados</small><b id="mainSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</b></div>
+              <div class="actions"><button type="button" class="btn primary" id="openAttention">Atender y notificar</button><button type="button" class="btn secondary" id="openFicha">Ver ficha médica</button><button type="button" class="btn ghost" id="goDemo">Abrir flujo por roles</button></div>
+            </article>
+
+            <article class="card workflow-card">
+              <div class="section-head"><h3>Ruta de trabajo</h3><span class="badge blue">Orden sugerido</span></div>
+              <div class="flow-step"><div class="flow-num">1</div><div><b>Revisar alerta</b><p>Identificar prioridad y estudiante.</p></div></div>
+              <div class="flow-step"><div class="flow-num">2</div><div><b>Consultar ficha</b><p>Validar alergias, antecedentes y contactos.</p></div></div>
+              <div class="flow-step"><div class="flow-num">3</div><div><b>Registrar atención</b><p>Documentar EVA, zona, diagnóstico, acción y medicación.</p></div></div>
+              <div class="flow-step"><div class="flow-num">4</div><div><b>Notificar y cerrar</b><p>Familia informada, inventario actualizado y reporte disponible.</p></div></div>
+            </article>
+          </div>
+
+          <article class="card activity-card">
+            <div class="section-head"><h3>Actividad en tiempo real</h3><span class="badge green">Flujo activo</span></div>
+            <div class="feed" id="activityFeed"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="page" id="page-roles">
+        <div class="hero"><div class="hero-kicker">Vistas por rol</div><h1>Cada integrante puede mostrar una <span>experiencia diferente</span>.</h1><p>Estas vistas permiten revisar la operación de cada actor dentro del flujo institucional.</p><div class="role-switch"><button type="button" class="role-btn active" data-role="medico">Médico</button><button type="button" class="role-btn" data-role="docente">Docente</button><button type="button" class="role-btn" data-role="familia">Familia</button><button type="button" class="role-btn" data-role="directivo">Directivo</button></div></div>
+        <div id="role-medico" class="role-dashboard active"></div><div id="role-docente" class="role-dashboard"></div><div id="role-familia" class="role-dashboard"></div><div id="role-directivo" class="role-dashboard"></div>
+      </section>
+
+      <section class="page" id="page-alertas"><div class="section-head"><h3>Centro de alertas</h3><div style="display:flex;gap:10px;align-items:center"><span class="badge red">3 activas</span><button type="button" class="btn primary" onclick="openReportModal()">Nueva alerta</button></div></div><div class="card"><table class="table" id="alertsTable" aria-label="Tabla de alertas médicas"></table></div></section>
+      <section class="page" id="page-estudiantes">
+        <div class="section-head">
+          <h3>Estudiantes</h3>
+          <div style="display:flex;gap:10px;align-items:center"><span class="badge blue">Fichas activas</span><button type="button" class="btn primary" onclick="openStudentModal()">Nueva ficha médica</button></div>
+        </div>
+        <div class="card">
+          <table class="table" id="studentsTable" aria-label="Tabla de estudiantes y condiciones registradas"></table>
+        </div>
+      </section>
+      <section class="page" id="page-riesgo">
+        <div class="section-head"><h3>Priorización de riesgo</h3><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge blue">Priorización operativa</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Riesgo alto</small><strong class="red" id="riskHigh">0</strong><em class="red">requiere acción</em></div>
+          <div class="kpi"><small>Seguimiento</small><strong class="amber" id="riskMedium">0</strong><em class="amber">monitoreo activo</em></div>
+          <div class="kpi"><small>Estable</small><strong class="green" id="riskLow">0</strong><em class="green">control regular</em></div>
+          <div class="kpi"><small>Criterios evaluados</small><strong id="riskCriteria">6</strong><em class="green">por estudiante</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Priorización por estudiante</h3><span class="badge green">Calculado en tiempo real</span></div>
+            <table class="table" id="riskTable" aria-label="Tabla de semáforo de riesgo por estudiante"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Lógica del semáforo</h3><span class="badge amber">No diagnóstico</span></div>
+            <div id="riskLogic"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-atenciones">
+        <div class="section-head">
+          <h3>Registro médico escolar</h3>
+          <button type="button" class="btn primary" onclick="openAttentionModal()">Nueva atención médica</button>
+        </div>
+        <div class="card"><table class="table" id="careTable" aria-label="Tabla de atenciones registradas"></table></div>
+      </section>
+      <section class="page" id="page-vacunas">
+        <div class="section-head"><h3>Control de vacunas</h3><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge blue">Referencia MSP 2025</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Registros estudiantiles</small><strong id="vacTotal">0</strong><em class="green">en seguimiento</em></div>
+          <div class="kpi"><small>Al día</small><strong class="green" id="vacOk">0</strong><em class="green">según registro</em></div>
+          <div class="kpi"><small>Pendientes</small><strong class="red" id="vacPending">0</strong><em class="red">requieren verificación</em></div>
+          <div class="kpi"><small>Próxima revisión</small><strong class="amber" id="vacReview">0</strong><em class="amber">programadas</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Seguimiento por estudiante</h3><span class="badge green">Carné / certificado</span></div>
+            <table class="table" id="vaccinesTable" aria-label="Tabla de seguimiento de vacunas"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Esquema MSP para edad escolar</h3><span class="badge amber">No sustituye criterio médico</span></div>
+            <div id="vaccineSchedule"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-inventario">
+        <div class="section-head"><h3>Medicamentos disponibles</h3><div class="inventory-actions"><span class="badge blue">Control interno</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button><button type="button" class="btn primary" onclick="openMedicineModal()">Añadir medicamento</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Medicamentos activos</small><strong id="invTotal">0</strong><em class="green">registrados</em></div>
+          <div class="kpi"><small>Reposición requerida</small><strong class="red" id="invLow">0</strong><em class="red">bajo mínimo</em></div>
+          <div class="kpi"><small>Próximos a caducar</small><strong class="amber" id="invExpire">0</strong><em class="amber">revisión necesaria</em></div>
+          <div class="kpi"><small>Usos del mes</small><strong id="invUses">0</strong><em class="green">trazables</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Stock disponible</h3><span class="badge green">Actualizado</span></div>
+            <table class="table" id="inventoryTable" aria-label="Tabla de inventario de medicamentos"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Historial de uso</h3><span class="badge amber">Trazabilidad</span></div>
+            <div id="inventoryHistory"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-familias"><div class="grid"><article class="card"><div class="section-head"><h3>Notificaciones familiares</h3><span class="badge green">Lectura activa</span></div><div id="familyNotices"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreen"></div></div></article></div></section>
+      <section class="page" id="page-reportes"><div class="kpis"><div class="kpi"><small>Casos cerrados</small><strong class="green">24</strong><em class="green">89% del día</em></div><div class="kpi"><small>Promedio respuesta</small><strong>2m 34s</strong><em class="green">óptimo</em></div><div class="kpi"><small>Lecturas familia</small><strong class="green" id="reportRead">94%</strong><em>confirmadas</em></div><div class="kpi"><small>Riesgo alto</small><strong class="red">2</strong><em class="red">seguimiento</em></div></div><div class="cards3"><div class="card"><h3>Alertas por prioridad</h3><div class="chipline"><span class="chip red">Crítica 2</span><span class="chip amber">Media 6</span><span class="chip green">Baja 19</span></div></div><div class="card"><h3>Top motivos</h3><p>Dolor abdominal, golpes leves, mareos, fiebre y ansiedad escolar.</p></div><div class="card"><h3>Valor institucional</h3><p>Menos llamadas sueltas, más trazabilidad, mejores decisiones directivas.</p></div></div></section>
+      <section class="page" id="page-config"><div class="cards3"><div class="card"><h3>Roles</h3><p>Médico, docente, familia, directivo y administrador con accesos diferenciados.</p></div><div class="card"><h3>Notificaciones</h3><p>Alertas críticas, confirmación de lectura y recordatorios de seguimiento.</p></div><div class="card"><h3>Catálogos clínicos</h3><p>Síntomas frecuentes, medicamentos, alergias, vacunas y estados de atención.</p></div></div></section>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><input id="reportStudent" value="Sofía Martínez"></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" value="Aula 3B · 2° piso"></div></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</textarea></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
+<div class="modal" id="fichaModal" role="dialog" aria-modal="true" aria-labelledby="fichaModalTitle">
+  <div class="modal-box">
+    <h3 id="fichaModalTitle">Ficha médica estudiantil</h3>
+    <p>Información crítica disponible antes de intervenir.</p>
+    <div id="fichaContent"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('fichaModal')">Cerrar</button>
+      <button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="studentModal" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle">
+  <div class="modal-box">
+    <h3 id="studentModalTitle">Nueva ficha médica estudiantil</h3>
+    <p>Todos los campos son opcionales. La ficha puede completarse progresivamente.</p>
+
+    <div class="medical-form-section">
+      <h4>Datos personales</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newFullName">Nombre completo</label><input id="newFullName" placeholder="Nombre y apellidos"></div>
+        <div class="field"><label for="newBirthDate">Fecha de nacimiento</label><input id="newBirthDate" type="date"></div>
+        <div class="field"><label for="newAge">Edad</label><input id="newAge" placeholder="Ej. 9 años"></div>
+        <div class="field"><label for="newSex">Sexo</label><select id="newSex"><option value="">Sin especificar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></div>
+        <div class="field"><label for="newCourse">Curso / paralelo</label><input id="newCourse" placeholder="Ej. 6° A"></div>
+        <div class="field"><label for="newPhone">Teléfono</label><input id="newPhone" placeholder="Teléfono de contacto"></div>
+      </div>
+      <div class="field"><label for="newAddress">Dirección</label><input id="newAddress" placeholder="Dirección domiciliaria"></div>
+      <div class="field"><label for="newEmail">Correo electrónico</label><input id="newEmail" type="email" placeholder="correo@dominio.com"></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Contactos de emergencia</h4>
+      <div class="form-grid">
+        <div class="field"><label for="contact1Name">Contacto 1</label><input id="contact1Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact1Relation">Relación</label><input id="contact1Relation" placeholder="Madre, padre, tutor"></div>
+        <div class="field"><label for="contact1Phone">Teléfono</label><input id="contact1Phone" placeholder="Teléfono"></div>
+        <div class="field"><label for="contact2Name">Contacto 2</label><input id="contact2Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact2Relation">Relación</label><input id="contact2Relation" placeholder="Relación"></div>
+        <div class="field"><label for="contact2Phone">Teléfono</label><input id="contact2Phone" placeholder="Teléfono"></div>
+        <div class="field"><label for="contact3Name">Contacto 3</label><input id="contact3Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact3Relation">Relación</label><input id="contact3Relation" placeholder="Relación"></div>
+        <div class="field"><label for="contact3Phone">Teléfono</label><input id="contact3Phone" placeholder="Teléfono"></div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Historia clínica inicial</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newAllergies">Alergias</label><input id="newAllergies" placeholder="Alergias conocidas"></div>
+        <div class="field"><label for="newChronic">Enfermedades crónicas</label><input id="newChronic" placeholder="Enfermedades crónicas"></div>
+      </div>
+      <div class="field"><label for="newMedicines">Medicamentos habituales</label><textarea id="newMedicines" placeholder="Medicamentos de uso habitual"></textarea></div>
+      <div class="field"><label for="newRestrictions">Restricciones y consideraciones escolares</label><textarea id="newRestrictions" placeholder="Ej. evitar actividad física intensa, restricciones alimentarias, acompañamiento requerido"></textarea></div>
+      <div class="field"><label for="newMedicalNotes">Otra información médica importante</label><textarea id="newMedicalNotes" placeholder="Información relevante para el personal médico escolar"></textarea></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Seguro, vacunas y consentimientos</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newInsurance">Seguro médico</label><input id="newInsurance" placeholder="Seguro privado, IESS, ninguno u otro"></div>
+        <div class="field"><label for="newVaccineStatus">Estado de vacunación</label><select id="newVaccineStatus"><option value="">Sin registrar</option><option>Al día</option><option>Pendiente de verificación</option><option>Requiere actualización</option></select></div>
+        <div class="field"><label for="newMedicationAuth">Autorización de medicación básica</label><select id="newMedicationAuth"><option value="">Sin registrar</option><option>Autoriza</option><option>No autoriza</option></select></div>
+        <div class="field"><label for="newEmergencyTransfer">Traslado en emergencia</label><select id="newEmergencyTransfer"><option value="">Sin registrar</option><option>Autoriza</option><option>No autoriza</option></select></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('studentModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="saveStudentMedicalRecord()">Guardar ficha</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="attentionModal" role="dialog" aria-modal="true" aria-labelledby="attentionModalTitle">
+  <div class="modal-box">
+    <h3 id="attentionModalTitle">Registrar atención médica</h3>
+    <p>Vista del departamento médico. Todos los campos son opcionales.</p>
+
+    <div class="medical-form-section">
+      <h4>Identificación de la atención</h4>
+      <div class="form-grid">
+        <div class="field"><label for="careStudent">Estudiante</label><select id="careStudent"></select></div>
+        <div class="field"><label for="careStatus">Estado actual</label><select id="careStatus"><option value="">Sin especificar</option><option>En observación</option><option>Estable</option><option>Requiere seguimiento</option><option>Requiere derivación</option></select></div>
+        <div class="field"><label for="careEva">Escala EVA del dolor</label><select id="careEva"><option value="">Sin especificar</option><option>0 · Sin dolor</option><option>1 · Dolor muy leve</option><option>2 · Dolor leve</option><option>3 · Dolor leve</option><option>4 · Dolor moderado</option><option>5 · Dolor moderado</option><option>6 · Dolor moderado alto</option><option>7 · Dolor intenso</option><option>8 · Dolor muy intenso</option><option>9 · Dolor severo</option><option>10 · Máximo dolor</option></select></div>
+        <div class="field"><label for="careDerivation">Derivación</label><select id="careDerivation"><option value="">Sin especificar</option><option>No requiere derivación</option><option>Representante informado</option><option>Retiro por representante</option><option>Derivación a centro de salud</option><option>Emergencia externa</option></select></div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Área corporal afectada</h4>
+      <input type="hidden" id="careBodyArea">
+      <div class="body-area-selector">
+        <div class="body-avatar" aria-hidden="true">
+          <div class="body-avatar-figure" id="bodyAvatarFigure">
+            <span class="body-zone neck"></span>
+            <span class="body-zone abdomen"></span>
+            <span class="body-limb arm-left"></span>
+            <span class="body-limb arm-right"></span>
+            <span class="body-limb leg-left"></span>
+            <span class="body-limb leg-right"></span>
+          </div>
+        </div>
+        <div class="body-area-options" id="bodyAreaOptions">
+          <button type="button" class="area-btn" data-area="Cabeza">Cabeza</button>
+          <button type="button" class="area-btn" data-area="Cuello">Cuello</button>
+          <button type="button" class="area-btn" data-area="Tórax">Tórax</button>
+          <button type="button" class="area-btn" data-area="Abdomen">Abdomen</button>
+          <button type="button" class="area-btn" data-area="Brazo izquierdo">Brazo izquierdo</button>
+          <button type="button" class="area-btn" data-area="Brazo derecho">Brazo derecho</button>
+          <button type="button" class="area-btn" data-area="Pierna izquierda">Pierna izquierda</button>
+          <button type="button" class="area-btn" data-area="Pierna derecha">Pierna derecha</button>
+          <button type="button" class="area-btn" data-area="General / sin zona específica">General / sin zona específica</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Detalle clínico escolar</h4>
+      <div class="field"><label for="careSymptoms">Síntomas</label><textarea id="careSymptoms" placeholder="Síntomas observados o referidos por el estudiante"></textarea></div>
+      <div class="field"><label for="carePresumptiveDiagnosis">Diagnóstico presuntivo</label><textarea id="carePresumptiveDiagnosis" placeholder="Hipótesis inicial según valoración del personal médico"></textarea></div>
+      <div class="field"><label for="careActionDone">Acción realizada</label><textarea id="careActionDone" placeholder="Reposo, hidratación, curación, control, comunicación con familia, etc."></textarea></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Medicación y observaciones</h4>
+      <div class="form-grid">
+        <div class="field"><label for="careMedication">Medicamento administrado</label><select id="careMedication"></select></div>
+        <div class="field"><label for="careMedicationDose">Dosis / indicación</label><input id="careMedicationDose" placeholder="Ej. 1 unidad, dosis indicada, no aplica"></div>
+      </div>
+      <div class="field"><label for="careObservations">Observaciones</label><textarea id="careObservations" placeholder="Observaciones adicionales de la atención"></textarea></div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('attentionModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="submitCare()">Registrar y notificar familia</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="medicineModal" role="dialog" aria-modal="true" aria-labelledby="medicineModalTitle">
+  <div class="modal-box">
+    <h3 id="medicineModalTitle">Añadir medicamento al inventario</h3>
+    <p>Registro interno de stock médico escolar. Todos los campos son opcionales.</p>
+
+    <div class="medical-form-section">
+      <h4>Datos del medicamento / insumo</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newMedicineName">Medicamento / insumo</label><input id="newMedicineName" placeholder="Ej. Paracetamol pediátrico"></div>
+        <div class="field"><label for="newMedicineCategory">Categoría</label><input id="newMedicineCategory" placeholder="Ej. Analgésico, antihistamínico, insumo"></div>
+        <div class="field"><label for="newMedicineStock">Stock inicial</label><input id="newMedicineStock" type="number" min="0" placeholder="Ej. 20"></div>
+        <div class="field"><label for="newMedicineMin">Stock mínimo</label><input id="newMedicineMin" type="number" min="0" placeholder="Ej. 10"></div>
+        <div class="field"><label for="newMedicineExpires">Fecha de caducidad</label><input id="newMedicineExpires" type="date"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('medicineModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="saveMedicineToInventory()">Guardar medicamento</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="successModal" role="dialog" aria-modal="true" aria-labelledby="successTitle" aria-describedby="successText"><div class="modal-box success"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="36"><path d="m20 6-11 11-5-5"/></svg></div><h3 id="successTitle">Acción registrada</h3><p id="successText">El flujo fue actualizado correctamente.</p><div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal('successModal')">Continuar</button></div></div></div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

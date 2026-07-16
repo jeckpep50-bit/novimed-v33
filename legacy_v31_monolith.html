@@ -1,0 +1,2399 @@
+<!-- Novimed V30 | Hardening: XSS en todos los renders, persistencia local, búsqueda real,
+     accesibilidad de modales (Escape + foco), guardas anti-crash, limpieza de código muerto.
+     Base: V29 blindada para presentación. Comportamiento funcional preservado al 100%. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Novimed es una app web para gestión médica escolar: alertas, fichas, vacunas, inventario, familias, reportes y semáforo de riesgo institucional." />
+<meta name="theme-color" content="#06142a" />
+<meta property="og:title" content="Novimed — Centro de bienestar institucional" />
+<meta property="og:description" content="Gestión médica escolar con alertas, trazabilidad, familias conectadas y reportes institucionales." />
+<meta property="og:type" content="website" />
+<title>Novimed V31 — Centro de bienestar institucional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#06142a;--navy2:#0b2144;--blue:#2563eb;--sky:#38bdf8;--green:#14b8a6;--green2:#22c55e;--red:#ef4444;--amber:#f59e0b;--violet:#8b5cf6;--ink:#0f1b32;--text:#152238;--muted:#71819b;--line:#dde7f2;--soft:#f5f9fd;--card:#fff;--shadow:0 22px 60px rgba(15,35,70,.11)}
+*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(135deg,#f8fbff 0%,#eef6fc 55%,#f4fff9 100%);color:var(--text);overflow:hidden}button,input,textarea,select{font-family:inherit}.app{height:100vh;display:grid;grid-template-columns:244px 1fr;background:radial-gradient(circle at 82% 12%,rgba(56,189,248,.22),transparent 30%),radial-gradient(circle at 65% 100%,rgba(20,184,166,.16),transparent 34%),linear-gradient(135deg,#f8fbff 0%,#eef6fc 60%,#f9fffc 100%)}
+.sidebar{background:linear-gradient(180deg,#06142a 0%,#071b38 100%);padding:22px 18px;display:flex;flex-direction:column;color:#eaf3ff;border-right:1px solid rgba(255,255,255,.08);box-shadow:16px 0 40px rgba(7,23,47,.08)}.brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}.mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#34d399,#2563eb);display:grid;place-items:center;box-shadow:0 0 0 12px rgba(20,184,166,.08),0 16px 42px rgba(20,184,166,.28)}.mark svg{width:25px;height:25px}.brand h1{font-size:19px;line-height:1;font-weight:900;letter-spacing:-.04em}.brand span{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#91a7c3}.tag{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:18px;padding:16px;margin-bottom:22px}.tag strong{display:block;color:#7dd3fc;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}.tag p{font-size:12px;line-height:1.5;color:#d6e2f2}.mini-kpis{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;opacity:.78}.mini-kpis span{background:rgba(255,255,255,.10);border-radius:8px;padding:5px 8px;font-size:10px;font-weight:700;color:#dceeff}.nav{display:flex;flex-direction:column;gap:7px;flex:1}.nav button{position:relative;height:48px;border:0;border-radius:15px;background:transparent;color:#98abc5;display:flex;align-items:center;gap:13px;padding:0 15px;font-weight:800;font-size:14px;cursor:pointer;transition:.18s}.nav button svg{width:19px;height:19px;stroke-width:1.8}.nav button.active,.nav button:hover{background:linear-gradient(90deg,rgba(20,184,166,.24),rgba(37,99,235,.13));color:#dffaf4;box-shadow:inset 3px 0 0 var(--green)}.pill{margin-left:auto;min-width:24px;height:24px;border-radius:999px;background:#f87171;color:white;display:grid;place-items:center;font-size:12px;font-weight:900}.user{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:16px}.user-row{display:flex;align-items:center;gap:11px}.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#dff7ff,#bfe7f8);color:#0e4a6d;font-weight:900}.user b{font-size:14px}.user small{display:block;color:#b8c9de;margin-top:3px}.online{display:flex;align-items:center;gap:7px;color:#86efac;font-size:12px;font-weight:800;margin-top:14px}.online:before{content:"";width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 6px rgba(34,197,94,.1)}
+.main{display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden;background:linear-gradient(135deg,#DDF7FF 0%,#EEF9FF 46%,#E7FFF8 100%)}.topbar{height:82px;display:flex;align-items:center;gap:22px;padding:0 34px;border-bottom:1px solid rgba(120,145,175,.17);background:rgba(248,251,255,.74);backdrop-filter:blur(18px)}.title{flex:1}.title h2{font-size:25px;letter-spacing:-.04em;color:#12203a}.title p{font-size:13px;color:var(--muted);margin-top:5px}.search{width:390px;height:48px;border:1px solid var(--line);background:rgba(255,255,255,.78);border-radius:18px;display:flex;align-items:center;gap:11px;padding:0 15px;color:#7c8ea8;box-shadow:0 14px 35px rgba(15,35,70,.05)}.search input{border:0;outline:0;background:transparent;flex:1;color:var(--ink);font-size:14px}.bell{position:relative;width:48px;height:48px;border:1px solid var(--line);background:white;border-radius:17px;display:grid;place-items:center;box-shadow:var(--shadow);cursor:pointer}.bell span{position:absolute;right:8px;top:7px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:white;display:grid;place-items:center;font-size:11px;font-weight:900}.content{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:28px 34px 48px;scroll-behavior:smooth;background:radial-gradient(circle at 78% 8%,rgba(56,189,248,.24),transparent 30%),linear-gradient(135deg,rgba(224,248,255,.88),rgba(240,253,255,.78) 50%,rgba(232,255,248,.82))}.content::-webkit-scrollbar{width:10px}.content::-webkit-scrollbar-thumb{background:#b8c9de;border-radius:999px}.content::-webkit-scrollbar-track{background:rgba(255,255,255,.45)}.page{display:none}.page.active{display:block}.hero{position:relative;border-radius:34px;background:linear-gradient(135deg,#fff 0%,#f2f8ff 48%,#edfff8 100%);border:1px solid rgba(204,220,236,.82);box-shadow:var(--shadow);padding:28px 30px;overflow:hidden;margin-bottom:20px}.hero:after{content:"";position:absolute;right:-60px;top:-80px;width:360px;height:260px;background:radial-gradient(circle,rgba(56,189,248,.3),transparent 65%);filter:blur(8px)}.hero-kicker{color:var(--green);font-weight:900;letter-spacing:.18em;font-size:12px;text-transform:uppercase}.hero h1{max-width:800px;font-size:38px;line-height:1.06;letter-spacing:-.055em;color:#13213a;margin-top:10px}.hero h1 span{color:var(--green)}.hero p{max-width:820px;margin-top:12px;color:#62728a;font-size:15px;line-height:1.55}.role-switch{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.role-btn{height:42px;border:1px solid #dce7f2;background:white;color:#31435f;border-radius:999px;padding:0 16px;font-weight:900;cursor:pointer}.role-btn.active{background:linear-gradient(135deg,#14b8a6,#2563eb);color:white;border-color:transparent;box-shadow:0 14px 28px rgba(20,184,166,.22)}.grid{display:grid;grid-template-columns:1.2fr .9fr;gap:20px}.row{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}.kpi,.card{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:0 18px 46px rgba(15,35,70,.07)}.kpi small{display:block;color:#75859b;font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:900}.kpi strong{display:block;font-size:29px;margin-top:9px;letter-spacing:-.04em;color:#14223b}.kpi em{display:block;margin-top:6px;font-style:normal;font-size:12px;font-weight:900}.green{color:var(--green)}.red{color:var(--red)}.amber{color:var(--amber)}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.section-head h3{font-size:18px;letter-spacing:-.035em;color:#14223b}.card>h3:first-child{margin-bottom:10px;font-size:18px;letter-spacing:-.035em;color:#14223b}.badge{border-radius:999px;padding:7px 12px;font-size:12px;font-weight:900}.badge.red{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}.badge.green{background:#ecfdf5;color:#059669;border:1px solid #bbf7d0}.badge.blue{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}.badge.amber{background:#fffbeb;color:#b45309;border:1px solid #fde68a}.student{display:flex;gap:15px;align-items:center;margin-bottom:16px}.student .avatar{width:58px;height:58px;font-size:18px}.student h4{font-size:21px;color:#12203a}.student p{color:#71819b;font-size:13px;margin-top:4px}.alert-note{background:linear-gradient(135deg,#fff8e8,#fffdf6);border:1px solid #fde7b0;border-radius:17px;padding:13px 14px;color:#6b4b00;font-size:13px;font-weight:800;margin-bottom:14px}.symptoms{border-radius:20px;background:#f7fafe;border:1px solid #e2eaf4;padding:16px;margin-bottom:16px}.symptoms small{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7c8ea8;font-weight:900}.symptoms b{display:block;margin-top:7px;font-size:17px;line-height:1.35;color:#12203a}.actions{display:flex;gap:10px;flex-wrap:wrap}.btn{height:44px;border-radius:14px;border:0;padding:0 17px;font-weight:900;cursor:pointer;font-size:14px}.btn.secondary{background:#f4f8fc;color:#26405f;border:1px solid #dce7f2}.btn.primary{background:linear-gradient(135deg,#14b8a6,#22c55e);color:white;box-shadow:0 12px 25px rgba(20,184,166,.27)}.btn.danger{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}.btn.blue{background:linear-gradient(135deg,#2563eb,#38bdf8);color:white}.feed{display:flex;flex-direction:column}.event{display:grid;grid-template-columns:48px 22px 1fr;gap:10px;padding:12px 0;border-bottom:1px solid #e8eff7}.event:last-child{border-bottom:0}.event time{font-size:12px;color:#7c8ea8}.dot{width:12px;height:12px;border-radius:50%;margin-top:2px}.event b{font-size:14px;color:#14223b}.event p{font-size:12px;color:#71819b;line-height:1.4;margin-top:3px}.demo-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.demo-card{background:white;border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 14px 34px rgba(15,35,70,.06)}.demo-card small{font-size:11px;color:#71819b;text-transform:uppercase;letter-spacing:.1em;font-weight:900}.demo-card b{display:block;font-size:16px;margin-top:7px;color:#12203a}.demo-card p{font-size:12px;color:#71819b;line-height:1.4;margin-top:5px}.role-dashboard{display:none}.role-dashboard.active{display:block}.table{width:100%;border-collapse:collapse}.table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#71819b;padding:12px;border-bottom:1px solid #e8eff7}.table td{font-size:13px;color:#14223b;padding:13px 12px;border-bottom:1px solid #eef3f8;font-weight:700}.phone{width:260px;margin:0 auto;border-radius:36px;background:#0a1830;padding:10px;box-shadow:0 24px 70px rgba(15,35,70,.25)}.screen{background:#f9fcff;border-radius:28px;padding:18px;min-height:450px}.screen-top{display:flex;align-items:center;justify-content:space-between}.screen h4{font-size:16px;color:#13213a}.mini{font-size:11px;color:#7c8ea8}.parent-card{margin-top:16px;border-radius:18px;background:linear-gradient(135deg,#2563eb,#14b8a6);padding:15px;color:white}.parent-card b{display:block;font-size:16px}.parent-card span{font-size:12px;opacity:.86}.notif-mobile{margin-top:14px;background:#fff1f2;border:1px solid #fecaca;border-radius:16px;padding:13px;color:#7f1d1d}.notif-mobile b{font-size:13px}.notif-mobile p{font-size:12px;margin-top:4px;line-height:1.35}.confirm{margin-top:13px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:16px;padding:13px;color:#065f46}.confirm b{font-size:13px}.confirm p{font-size:12px;margin-top:4px}.bottom-nav{display:flex;justify-content:space-around;margin-top:18px;color:#8191a8;font-size:13px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{margin-bottom:14px}.field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#71819b;font-weight:900;margin-bottom:8px}.field input,.field select,.field textarea{width:100%;border:1px solid #dce7f2;border-radius:16px;padding:13px 14px;background:white;color:#14223b;outline:0;font-weight:650}.field input,.field select{height:48px}.field textarea{min-height:105px;resize:vertical}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green);box-shadow:0 0 0 4px rgba(20,184,166,.12)}.toast{position:absolute;right:34px;top:96px;width:340px;background:rgba(255,255,255,.9);border:1px solid rgba(221,231,242,.9);border-radius:22px;padding:14px 16px;box-shadow:0 20px 60px rgba(20,45,78,.16);backdrop-filter:blur(20px);display:none;gap:12px;align-items:flex-start;animation:slideToast .3s ease both;z-index:20}.toast.show{display:flex}
+.mobile-menu-btn{display:none;width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:white;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);padding:0}
+.mobile-menu-btn svg{width:20px;height:20px}
+.mobile-overlay{display:none}.toast-icon{width:36px;height:36px;border-radius:14px;background:#fff1f2;color:#e11d48;display:grid;place-items:center}.toast b{font-size:14px}.toast p{font-size:12px;color:var(--muted);line-height:1.35;margin-top:3px}@keyframes slideToast{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}.modal{position:fixed;inset:0;background:rgba(7,23,47,.42);display:none;align-items:center;justify-content:center;backdrop-filter:blur(7px);z-index:50}.modal.open{display:flex}.modal-box{width:min(680px,94vw);max-height:90vh;overflow:auto;background:white;border:1px solid var(--line);border-radius:28px;padding:26px;box-shadow:0 34px 80px rgba(7,23,47,.25)}.modal-box h3{font-size:22px;color:#12203a}.modal-box p{color:#71819b;font-size:13px;margin-top:6px}.modal-actions{display:flex;gap:10px;margin-top:18px}.modal-actions .btn{flex:1}.check{width:66px;height:66px;border-radius:22px;background:#ecfdf5;color:#059669;display:grid;place-items:center;margin:0 auto 14px}.success{text-align:center;padding:28px}.hidden{display:none!important}.flow-step{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e8eff7}.flow-step:last-child{border-bottom:0}.flow-num{width:30px;height:30px;border-radius:12px;display:grid;place-items:center;background:#eaf5ff;color:#2563eb;font-weight:900}.flow-step b{font-size:14px}.flow-step p{font-size:12px;color:#71819b;margin-top:2px}.chipline{display:flex;gap:8px;flex-wrap:wrap}.chip{border:1px solid #dce7f2;background:#fff;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900;color:#31435f}.chip.red{background:#fef2f2;color:#dc2626;border-color:#fecaca}.chip.green{background:#ecfdf5;color:#059669;border-color:#bbf7d0}.chip.blue{background:#eff6ff;color:#2563eb;border-color:#bfdbfe}.script-box{background:#07172f;color:#dffaf4;border-radius:22px;padding:18px;font-size:14px;line-height:1.55}.script-box b{color:#7dd3fc}.toast-log{max-height:360px;overflow:auto}.empty{border:1px dashed #cbd8e8;border-radius:20px;padding:24px;text-align:center;color:#71819b;font-weight:800}.role-title{display:flex;align-items:center;gap:10px;margin-bottom:16px}.role-title .avatar{width:50px;height:50px}.role-title h3{font-size:20px}.role-title p{font-size:13px;color:#71819b;margin-top:3px}
+.tag{background:linear-gradient(145deg,rgba(20,184,166,.98),rgba(34,197,94,.78));border:1px solid rgba(187,247,208,.55);box-shadow:0 18px 44px rgba(20,184,166,.24)}.tag strong{color:#ecfffa}.tag p{color:#f0fffb}.tag .mini-kpis span{background:rgba(255,255,255,.16);color:#ffffff;border:1px solid rgba(255,255,255,.14)}
+@media(max-width:1100px){.app{grid-template-columns:88px 1fr}.brand h1,.brand span,.tag,.nav-label,.user b,.user small,.online{display:none}.sidebar{padding:22px 12px}.brand{justify-content:center}.nav button{justify-content:center;padding:0}.pill{position:absolute;margin-left:25px}.grid,.row,.cards3{grid-template-columns:1fr}.kpis,.demo-strip{grid-template-columns:repeat(2,1fr)}.search{width:260px}}@media(max-width:720px){html,body{overflow:auto}.app{height:auto;min-height:100vh;grid-template-columns:1fr}.main{height:auto}.topbar{height:auto;padding:20px;flex-wrap:wrap}.search{width:100%}.content{padding:20px}.hero h1{font-size:30px}.kpis,.demo-strip,.form-grid{grid-template-columns:1fr}.toast{right:20px;left:20px;width:auto}.phone{width:100%}}
+
+
+/* FIX V6 — Scroll independiente para iPad/Safari y escritorio */
+html,body{
+  height:100%;
+  overflow:hidden;
+}
+.app{
+  height:100vh;
+  height:100dvh;
+  min-height:0;
+  overflow:hidden;
+}
+.sidebar{
+  height:100vh;
+  height:100dvh;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  padding-bottom:24px;
+}
+.sidebar::-webkit-scrollbar{width:8px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.24);border-radius:999px}
+.sidebar::-webkit-scrollbar-track{background:rgba(255,255,255,.04)}
+.nav{
+  flex:0 0 auto;
+  min-height:max-content;
+  padding-bottom:14px;
+}
+.user{
+  flex:0 0 auto;
+  margin-top:10px;
+}
+.main{
+  height:100vh;
+  height:100dvh;
+  min-height:0;
+  overflow:hidden;
+}
+.topbar{
+  flex:0 0 82px;
+}
+.content{
+  flex:1 1 auto;
+  height:auto;
+  min-height:0;
+  overflow-y:auto!important;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  padding-bottom:120px;
+}
+.page.active{
+  min-height:max-content;
+  padding-bottom:40px;
+}
+@supports not (height:100dvh){
+  .app,.sidebar,.main{height:100vh}
+}
+@media(max-width:720px){
+  html,body{overflow:auto}
+  .app,.main{height:auto;min-height:100vh;overflow:visible}
+  .content{height:auto;overflow:visible!important;padding-bottom:40px}
+}
+
+
+/* FIX V9 — Responsive móvil real para teléfonos */
+@media(max-width:720px){
+  html,body{
+    width:100%;
+    min-height:100%;
+    overflow:auto;
+    background:linear-gradient(135deg,#f8fbff 0%,#eef6fc 55%,#f4fff9 100%);
+  }
+
+  .app{
+    display:block;
+    width:100%;
+    min-height:100vh;
+    height:auto;
+    overflow:visible;
+  }
+
+  .sidebar{
+    position:fixed!important;
+    top:0;
+    left:0;
+    height:100vh!important;
+    height:100dvh!important;
+    width:84%;
+    max-width:320px;
+    transform:translateX(-100%);
+    transition:transform .28s ease;
+    z-index:60;
+    display:flex!important;
+    box-shadow:18px 0 50px rgba(7,23,47,.35);
+  }
+
+  .sidebar.open{
+    transform:translateX(0);
+    padding:22px 18px!important;
+  }
+
+  .sidebar.open .brand{
+    justify-content:flex-start!important;
+  }
+
+  .sidebar.open .brand h1{
+    display:block!important;
+  }
+
+  .sidebar.open .brand span,
+  .sidebar.open .nav-label,
+  .sidebar.open .user b,
+  .sidebar.open .user small{
+    display:initial!important;
+  }
+
+  .sidebar.open .tag{
+    display:block!important;
+  }
+
+  .sidebar.open .user{
+    display:block!important;
+  }
+
+  .sidebar.open .online{
+    display:flex!important;
+  }
+
+  .sidebar.open .nav button{
+    justify-content:flex-start!important;
+    padding:0 15px!important;
+  }
+
+  .sidebar.open .pill{
+    position:static!important;
+    margin-left:auto!important;
+  }
+
+  .mobile-menu-btn{
+    display:flex!important;
+  }
+
+  .mobile-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(7,23,47,.42);
+    backdrop-filter:blur(3px);
+    z-index:55;
+  }
+
+  .mobile-overlay.open{
+    display:block;
+  }
+
+  .main{
+    width:100%;
+    height:auto;
+    min-height:100vh;
+    overflow:visible;
+  }
+
+  .topbar{
+    height:auto;
+    min-height:0;
+    padding:22px 18px 18px;
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:14px;
+    align-items:start;
+    background:rgba(248,251,255,.88);
+  }
+
+  .title{
+    grid-column:1 / -1;
+  }
+
+  .title h2{
+    font-size:30px;
+    line-height:1.05;
+    letter-spacing:-.055em;
+    max-width:92%;
+  }
+
+  .title p{
+    font-size:15px;
+    line-height:1.35;
+    margin-top:10px;
+    max-width:94%;
+  }
+
+  .search{
+    grid-column:1 / 2;
+    width:100%;
+    height:52px;
+    border-radius:19px;
+    padding:0 14px;
+  }
+
+  .search input{
+    font-size:15px;
+    min-width:0;
+  }
+
+  .bell{
+    grid-column:2 / 3;
+    width:52px;
+    height:52px;
+    border-radius:18px;
+    box-shadow:0 12px 28px rgba(15,35,70,.08);
+  }
+
+  .content{
+    height:auto;
+    min-height:0;
+    overflow:visible!important;
+    padding:18px 18px 96px;
+    background:radial-gradient(circle at 78% 8%,rgba(56,189,248,.20),transparent 30%),
+      linear-gradient(135deg,rgba(224,248,255,.88),rgba(240,253,255,.78) 50%,rgba(232,255,248,.82));
+  }
+
+  .kpis{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .kpi{
+    border-radius:22px;
+    padding:17px 16px;
+    min-height:132px;
+  }
+
+  .kpi small{
+    font-size:10px;
+    line-height:1.25;
+    letter-spacing:.12em;
+  }
+
+  .kpi strong{
+    font-size:32px;
+    margin-top:10px;
+  }
+
+  .kpi em{
+    font-size:12px;
+    line-height:1.25;
+  }
+
+  .grid,.row,.cards3{
+    grid-template-columns:1fr;
+    gap:16px;
+  }
+
+  .card{
+    border-radius:24px;
+    padding:18px;
+  }
+
+  .section-head{
+    gap:10px;
+    align-items:flex-start;
+  }
+
+  .section-head h3{
+    font-size:19px;
+    line-height:1.15;
+  }
+
+  .badge{
+    white-space:nowrap;
+    font-size:11px;
+    padding:7px 10px;
+  }
+
+  .student{
+    gap:12px;
+  }
+
+  .student .avatar{
+    width:52px;
+    height:52px;
+    font-size:17px;
+    flex:0 0 auto;
+  }
+
+  .student h4{
+    font-size:22px;
+    line-height:1.1;
+  }
+
+  .student p{
+    font-size:13px;
+    line-height:1.3;
+  }
+
+  .symptoms b{
+    font-size:16px;
+  }
+
+  .actions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+
+  .btn{
+    width:100%;
+    min-height:46px;
+    height:auto;
+    padding:12px 15px;
+    white-space:normal;
+  }
+
+  .event{
+    grid-template-columns:42px 18px 1fr;
+    gap:8px;
+  }
+
+  .event b{
+    font-size:13px;
+  }
+
+  .event p{
+    font-size:12px;
+  }
+
+  .hero{
+    border-radius:26px;
+    padding:22px 18px;
+  }
+
+  .hero h1{
+    font-size:28px;
+    line-height:1.08;
+  }
+
+  .hero p{
+    font-size:14px;
+  }
+
+  .role-switch{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+
+  .role-btn{
+    width:100%;
+    height:42px;
+    padding:0 10px;
+    font-size:13px;
+  }
+
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .table{
+    min-width:640px;
+  }
+
+  .card:has(.table){
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .phone{
+    width:min(100%,300px);
+  }
+
+  .modal-box{
+    width:94vw;
+    max-height:86vh;
+    border-radius:24px;
+    padding:22px 18px;
+  }
+
+  .toast{
+    position:fixed;
+    top:14px;
+    left:14px;
+    right:14px;
+    width:auto;
+    z-index:80;
+  }
+
+  .page.active{
+    padding-bottom:20px;
+  }
+}
+
+@media(max-width:420px){
+  .title h2{
+    font-size:28px;
+  }
+
+  .title p{
+    font-size:14px;
+  }
+
+  .kpis{
+    grid-template-columns:1fr;
+  }
+
+  .kpi{
+    min-height:112px;
+  }
+
+  .content{
+    padding-left:14px;
+    padding-right:14px;
+  }
+
+  .topbar{
+    padding-left:14px;
+    padding-right:14px;
+  }
+}
+
+@media(min-width:721px) and (max-width:1180px){
+  .app{
+    grid-template-columns:244px 1fr;
+  }
+
+  .brand h1,.brand span,.tag,.nav-label,.user b,.user small,.online{
+    display:initial;
+  }
+
+  .sidebar{
+    padding:22px 18px;
+  }
+
+  .nav button{
+    justify-content:flex-start;
+    padding:0 15px;
+  }
+
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  .kpis{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .search{
+    width:320px;
+  }
+}
+
+
+/* FIX V10 — Corrección de solapamiento topbar/contenido en teléfonos */
+@media(max-width:720px){
+  .main{
+    display:block!important;
+  }
+
+  .topbar{
+    flex:none!important;
+    display:grid!important;
+    grid-template-columns:52px minmax(0,1fr) 58px!important;
+    grid-template-rows:auto auto!important;
+    height:auto!important;
+    min-height:0!important;
+    overflow:visible!important;
+    position:relative;
+    z-index:3;
+  }
+
+  .mobile-menu-btn{
+    grid-column:1!important;
+    grid-row:1 / 3!important;
+    align-self:start;
+  }
+
+  .title{
+    grid-column:2 / 3!important;
+    grid-row:1!important;
+    min-width:0;
+  }
+
+  .search{
+    grid-column:2!important;
+    grid-row:2!important;
+    min-width:0;
+    max-width:100%;
+  }
+
+  .bell{
+    grid-column:3!important;
+    grid-row:2!important;
+    justify-self:end;
+    align-self:center;
+  }
+
+  .content{
+    display:block!important;
+    position:relative;
+    z-index:1;
+    padding-top:22px!important;
+  }
+
+  .kpis{
+    margin-top:0!important;
+  }
+
+  .kpi{
+    position:relative;
+    z-index:1;
+  }
+}
+
+@media(max-width:420px){
+  .topbar{
+    grid-template-columns:48px minmax(0,1fr) 54px!important;
+    gap:10px!important;
+  }
+
+  .search{
+    height:52px!important;
+  }
+
+  .bell{
+    width:52px!important;
+    height:52px!important;
+  }
+}
+
+
+/* FIX V11 — Altura real de documento en móviles para scroll completo */
+@media(max-width:720px){
+  html{
+    height:auto!important;
+    min-height:100%!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+
+  body{
+    height:auto!important;
+    min-height:100vh!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+
+  .app,
+  .main,
+  .content,
+  .page.active{
+    height:auto!important;
+    max-height:none!important;
+  }
+
+  .content{
+    min-height:calc(100vh - 210px)!important;
+    padding-bottom:120px!important;
+  }
+
+  .grid{
+    margin-bottom:0;
+  }
+}
+
+/* Módulo Semáforo de Riesgo */
+.risk-meter{height:10px;border-radius:999px;background:#edf3f9;overflow:hidden;min-width:110px}
+.risk-fill{height:100%;border-radius:999px}
+.risk-fill.green{background:var(--green2)}
+.risk-fill.amber{background:var(--amber)}
+.risk-fill.red{background:var(--red)}
+.risk-score{display:flex;align-items:center;gap:10px}
+.risk-rule{background:#f7fafe;border:1px solid #e2eaf4;border-radius:18px;padding:14px;margin-bottom:10px}
+.risk-rule b{display:block;font-size:13px;color:#14223b}
+.risk-rule p{font-size:12px;color:#71819b;line-height:1.4;margin-top:4px}
+
+/* Accesibilidad base */
+.skip-link{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden}
+.skip-link:focus{left:16px;top:16px;width:auto;height:auto;z-index:100;background:#ffffff;color:#06142a;border:2px solid #2563eb;border-radius:12px;padding:10px 14px;font-weight:900;box-shadow:0 12px 28px rgba(15,35,70,.18)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(37,99,235,.55);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+
+/* FIX V16 — Evita cortes visuales en chips, badges y tablas en iPad/escritorio */
+.table{
+  width:100%;
+  min-width:760px;
+}
+
+.card:has(.table){
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.table th,
+.table td{
+  vertical-align:middle;
+}
+
+.chip,
+.badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:max-content;
+  max-width:100%;
+  white-space:nowrap;
+  line-height:1.15;
+  text-align:center;
+}
+
+#inventoryTable th:nth-child(5),
+#inventoryTable td:nth-child(5){
+  min-width:165px;
+}
+
+#inventoryTable th:nth-child(6),
+#inventoryTable td:nth-child(6){
+  min-width:135px;
+}
+
+#inventoryTable .chip{
+  min-width:142px;
+}
+
+#inventoryTable .btn{
+  min-width:118px;
+}
+
+#vaccinesTable{
+  min-width:900px;
+}
+
+#riskTable{
+  min-width:920px;
+}
+
+@media(max-width:720px){
+  .table{
+    min-width:720px;
+  }
+
+  #inventoryTable,
+  #vaccinesTable,
+  #riskTable{
+    min-width:860px;
+  }
+}
+
+/* Módulo Ficha Médica Estudiantil */
+.medical-form-section{
+  border:1px solid #e2eaf4;
+  background:#f8fbff;
+  border-radius:22px;
+  padding:18px;
+  margin-top:16px;
+}
+.medical-form-section h4{
+  font-size:15px;
+  color:#14223b;
+  margin-bottom:14px;
+  letter-spacing:-.02em;
+}
+.ficha-summary{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin:16px 0;
+}
+.ficha-item{
+  background:#f8fbff;
+  border:1px solid #e2eaf4;
+  border-radius:18px;
+  padding:14px;
+}
+.ficha-item small{
+  display:block;
+  color:#71819b;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+.ficha-item b{
+  display:block;
+  color:#14223b;
+  font-size:14px;
+  line-height:1.35;
+}
+.ficha-critical{
+  background:#fff7ed;
+  border:1px solid #fed7aa;
+  color:#7c2d12;
+  border-radius:18px;
+  padding:14px;
+  margin:14px 0;
+  font-weight:800;
+}
+@media(max-width:720px){
+  .ficha-summary{
+    grid-template-columns:1fr;
+  }
+}
+
+/* Módulo Registro de Atención Médica */
+.body-area-selector{
+  display:grid;
+  grid-template-columns:150px 1fr;
+  gap:16px;
+  align-items:center;
+}
+.body-avatar{
+  min-height:260px;
+  border:1px solid #dce7f2;
+  border-radius:26px;
+  background:linear-gradient(180deg,#f8fbff,#eef7ff);
+  display:grid;
+  place-items:center;
+  padding:14px;
+}
+.body-avatar-figure{
+  width:98px;
+  height:220px;
+  position:relative;
+}
+.body-avatar-figure:before{
+  content:"";
+  position:absolute;
+  left:34px;
+  top:0;
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  background:#dbeafe;
+  border:2px solid #93c5fd;
+}
+.body-avatar-figure:after{
+  content:"";
+  position:absolute;
+  left:24px;
+  top:36px;
+  width:50px;
+  height:86px;
+  border-radius:26px 26px 18px 18px;
+  background:#dbeafe;
+  border:2px solid #93c5fd;
+}
+.body-limb{
+  position:absolute;
+  background:#dbeafe;
+  border:2px solid #93c5fd;
+  border-radius:999px;
+}
+.body-limb.arm-left{left:0;top:48px;width:24px;height:86px;transform:rotate(12deg)}
+.body-limb.arm-right{right:0;top:48px;width:24px;height:86px;transform:rotate(-12deg)}
+.body-limb.leg-left{left:26px;top:118px;width:20px;height:92px}
+.body-limb.leg-right{right:26px;top:118px;width:20px;height:92px}
+.body-area-options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.area-btn{
+  min-height:42px;
+  border:1px solid #dce7f2;
+  background:#ffffff;
+  color:#31435f;
+  border-radius:14px;
+  font-weight:900;
+  cursor:pointer;
+  padding:10px 12px;
+  text-align:center;
+}
+.area-btn.active{
+  border-color:#14b8a6;
+  background:#ecfdf5;
+  color:#047857;
+  box-shadow:0 0 0 4px rgba(20,184,166,.12);
+}
+
+/* V25 — EVA visual: resalta en rojo la zona corporal seleccionada */
+.body-avatar-figure:before,
+.body-avatar-figure:after,
+.body-limb,
+.body-zone{
+  transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,opacity .18s ease;
+}
+.body-zone{
+  position:absolute;
+  display:block;
+  pointer-events:none;
+  opacity:0;
+}
+.body-zone.neck{
+  left:39px;
+  top:30px;
+  width:20px;
+  height:14px;
+  border-radius:8px 8px 6px 6px;
+  background:#dbeafe;
+  border:2px solid #93c5fd;
+  z-index:1;
+}
+.body-zone.abdomen{
+  left:31px;
+  top:87px;
+  width:36px;
+  height:31px;
+  border-radius:12px 12px 16px 16px;
+  background:#dbeafe;
+  border:2px solid #93c5fd;
+  z-index:3;
+}
+.body-avatar-figure[data-area="Cabeza"]:before,
+.body-avatar-figure[data-area="Cuello"] .body-zone.neck,
+.body-avatar-figure[data-area="Tórax"]:after,
+.body-avatar-figure[data-area="Abdomen"] .body-zone.abdomen,
+.body-avatar-figure[data-area="Brazo izquierdo"] .body-limb.arm-left,
+.body-avatar-figure[data-area="Brazo derecho"] .body-limb.arm-right,
+.body-avatar-figure[data-area="Pierna izquierda"] .body-limb.leg-left,
+.body-avatar-figure[data-area="Pierna derecha"] .body-limb.leg-right{
+  background:linear-gradient(180deg,#fb7185,#ef4444)!important;
+  border-color:#ef4444!important;
+  box-shadow:0 0 0 5px rgba(239,68,68,.14),0 10px 22px rgba(239,68,68,.18);
+}
+.body-avatar-figure[data-area="Cuello"] .body-zone.neck,
+.body-avatar-figure[data-area="Abdomen"] .body-zone.abdomen{
+  opacity:1;
+}
+@media(max-width:720px){
+  .body-area-selector{
+    grid-template-columns:1fr;
+  }
+  .body-area-options{
+    grid-template-columns:1fr;
+  }
+  .body-avatar{
+    min-height:220px;
+  }
+}
+
+/* Módulo Alta de Medicamentos y Registro con Fecha */
+.inventory-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+#careTable{
+  min-width:1240px;
+}
+#inventoryTable{
+  min-width:980px;
+}
+@media(max-width:720px){
+  .inventory-actions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  #careTable{
+    min-width:1160px;
+  }
+  #inventoryTable{
+    min-width:920px;
+  }
+}
+
+
+
+/* UX V20 — Reordenamiento visual y arquitectura de información */
+.nav{gap:5px}
+.nav-group-label{margin:10px 10px 4px;color:#7dd3fc;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;opacity:.82}
+.nav-group-label span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar{height:92px;padding:0 38px;background:rgba(255,255,255,.78)}
+.title h2{font-size:29px;line-height:1.05}
+.title p{font-size:14px;max-width:760px}
+.content{padding:30px 42px 56px}
+.page.active{max-width:1320px;margin:0 auto;width:100%}
+.section-head{min-height:44px}
+.section-head h3{font-size:21px}
+.card{border-radius:28px;padding:24px}
+.kpi{border-radius:24px;padding:20px 22px}
+.kpi strong{font-size:34px}
+.home-dashboard{display:grid;gap:20px}
+.home-intro{display:flex;justify-content:space-between;gap:28px;align-items:center;background:linear-gradient(135deg,#ffffff 0%,#f1fbff 50%,#effff8 100%)}
+.home-intro h1{font-size:34px;line-height:1.08;letter-spacing:-.055em;color:#12203a;margin-top:8px;max-width:720px}
+.home-intro p{font-size:15px;color:#62728a;line-height:1.55;margin-top:10px;max-width:780px}
+.home-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;min-width:260px}
+.workflow-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:20px;align-items:start}
+.priority-card{min-height:100%;position:relative;border-left:4px solid var(--red);padding-left:24px}
+.workflow-card .flow-step{padding:14px 0}
+.activity-card{margin-top:0}
+.ux-kpis{margin-bottom:0}
+.btn.ghost{background:transparent;color:#6c7e98;border:1px dashed #cdd9e8;box-shadow:none;font-weight:800}
+.btn.ghost:hover{color:#2563eb;border-color:#2563eb}
+#page-atenciones .section-head,#page-inventario .section-head,#page-estudiantes .section-head{align-items:center}
+.inventory-actions{justify-content:flex-end}
+.table th{font-size:11px;color:#6b7890}
+.table td{font-size:14px;line-height:1.35}
+.modal-box{border-radius:32px;padding:30px}
+.medical-form-section{background:#fbfdff;border-radius:24px}
+@media(max-width:1100px){
+  .nav-group-label{display:none}
+  .content{padding:26px 28px 48px}
+  .workflow-grid{grid-template-columns:1fr}
+  .home-intro{align-items:flex-start;flex-direction:column}
+  .home-actions{justify-content:flex-start;min-width:0}
+}
+@media(max-width:720px){
+  .content{padding:18px 18px 96px!important}
+  .topbar{padding:20px 18px!important}
+  .home-intro h1{font-size:28px}
+  .home-intro{padding:20px}
+  .home-actions{width:100%;display:grid;grid-template-columns:1fr}
+  .workflow-grid{gap:16px}
+  .card{padding:18px;border-radius:24px}
+  .section-head{flex-direction:column;align-items:flex-start!important;gap:10px}
+  .inventory-actions{justify-content:flex-start;width:100%}
+  .inventory-actions .btn{width:100%}
+}
+
+
+/* V27 — Ajustes visuales solicitados para final */
+.home-intro{
+  border-left:6px solid var(--red);
+  box-shadow:0 24px 70px rgba(239,68,68,.10), var(--shadow);
+}
+.home-intro .hero-kicker{
+  color:var(--red);
+}
+.home-intro h1{
+  font-size:40px;
+}
+@media(max-width:720px){
+  .home-intro h1{
+    font-size:30px;
+  }
+}
+
+
+/* V29 — Corrección visual de tarjeta de usuario en barra lateral */
+@media (min-width:721px){
+  .user small{
+    display:block!important;
+  }
+}
+
+
+/* FIX V23 — Barra lateral estable en iPad/tablet + alerta dinámica conservada
+   Objetivo: evitar que distintos iPads entren en modos laterales diferentes.
+   Tablet/iPad/escritorio: sidebar completa y legible.
+   Teléfono: menú hamburguesa/off-canvas existente. */
+@media (min-width:721px){
+  html,
+  body{
+    overflow:hidden!important;
+  }
+
+  .app{
+    display:grid!important;
+    grid-template-columns:300px minmax(0,1fr)!important;
+    width:100%!important;
+    height:100vh!important;
+    height:100dvh!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+
+  .sidebar{
+    position:relative!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:none!important;
+    height:100vh!important;
+    height:100dvh!important;
+    min-height:0!important;
+    padding:22px 18px!important;
+    display:flex!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    z-index:1!important;
+  }
+
+  .brand{
+    justify-content:flex-start!important;
+  }
+
+  .brand h1,
+  .brand span,
+  .tag,
+  .nav-label,
+  .user b,
+  .user small,
+  .online,
+  .nav-group-label{
+    display:initial!important;
+    visibility:visible!important;
+  }
+
+  .tag{
+    display:block!important;
+  }
+
+  .online{
+    display:flex!important;
+  }
+
+  .nav{
+    width:100%!important;
+    gap:7px!important;
+  }
+
+  .nav button{
+    width:100%!important;
+    justify-content:flex-start!important;
+    padding:0 15px!important;
+    min-width:0!important;
+  }
+
+  .nav button svg{
+    flex:0 0 19px!important;
+  }
+
+  .nav-label{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:normal!important;
+    line-height:1.15!important;
+  }
+
+  .pill{
+    position:static!important;
+    margin-left:auto!important;
+    flex:0 0 auto!important;
+  }
+
+  .user{
+    display:block!important;
+    flex:0 0 auto!important;
+    margin-top:10px!important;
+  }
+
+  .mobile-menu-btn,
+  .mobile-overlay{
+    display:none!important;
+  }
+
+  .main{
+    height:100vh!important;
+    height:100dvh!important;
+    min-width:0!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+
+  .topbar{
+    flex:0 0 92px!important;
+    height:92px!important;
+    min-height:92px!important;
+    display:flex!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    padding:0 38px!important;
+  }
+
+  .content{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    height:auto!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+}
+
+@media (min-width:721px) and (max-width:900px){
+  .app{
+    grid-template-columns:280px minmax(0,1fr)!important;
+  }
+
+  .topbar{
+    padding:0 24px!important;
+    gap:16px!important;
+  }
+
+  .search{
+    width:280px!important;
+  }
+}
+
+/* V29 — Ajuste final de tarjeta de usuario: evita texto pegado en sidebar */
+@media (min-width:721px){
+  .sidebar .user small{
+    display:block!important;
+  }
+}
+
+</style>
+</head>
+<body>
+<a class="skip-link" href="#mainContent">Saltar al contenido principal</a>
+<div class="app">
+  <div class="mobile-overlay" id="mobileOverlay"></div>
+  <aside class="sidebar">
+    <div class="brand"><div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7.5c0 5.7-8 12-8 12s-8-6.3-8-12A4.5 4.5 0 0 1 12 4a4.5 4.5 0 0 1 8 3.5Z"/><path d="m8.5 11 2.2 2.2 5-5"/></svg></div><div><h1>Novimed</h1><span>Protección Inteligente</span></div></div>
+    <div class="tag"><strong>Centro médico escolar</strong><p>Alertas, atenciones, familias y reportes en un solo flujo.</p><div class="mini-kpis"><span>3 alertas</span><span>27 atenciones</span><span>94% lectura</span><span>2m 34s</span></div></div>
+    <nav class="nav" id="nav">
+      <div class="nav-group-label"><span>Operación diaria</span></div>
+      <button type="button" class="active" data-page="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="nav-label">Inicio</span></button>
+      <button type="button" data-page="alertas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nav-label">Centro de alertas</span><span class="pill">3</span></button>
+      <div class="nav-group-label"><span>Gestión estudiantil</span></div>
+      <button type="button" data-page="estudiantes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11l2 2 4-4"/></svg><span class="nav-label">Estudiantes</span></button>
+      <div class="nav-group-label"><span>Recursos y comunicación</span></div>
+      <button type="button" data-page="familias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg><span class="nav-label">Familias</span></button>
+      <button type="button" data-page="reportes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 14v3"/><path d="M12 10v7"/><path d="M17 6v11"/></svg><span class="nav-label">Reportes</span></button>
+      <div class="nav-group-label"><span>Simulación y sistema</span></div>
+      <button type="button" data-page="roles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="nav-label">Roles</span></button>
+      <button type="button" data-page="config"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V22a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="nav-label">Configuración</span></button>
+    </nav>
+    <div class="user"><div class="user-row"><div class="avatar" id="sidebarAvatar">MG</div><div><b id="sidebarName">Andrés Sánchez</b><small id="sidebarRole">Departamento médico</small></div></div><div class="online">En línea</div></div>
+  </aside>
+  <main class="main" id="mainContent" tabindex="-1">
+    <header class="topbar"><button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú" aria-expanded="false" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button><div class="title"><h2 id="pageTitle">Centro de bienestar institucional</h2><p id="pageSub">Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.</p></div><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="searchInput" aria-label="Buscar estudiante, alerta o atención" placeholder="Buscar estudiante, alerta o atención" /></div><button class="bell" id="bell" type="button" aria-label="Ver notificaciones médicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>3</span></button></header>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-icon">!</div><div><b id="toastTitle">Nueva alerta médica</b><p id="toastText">Sofía Martínez — Aula 3B. El centro médico fue notificado.</p></div></div>
+    <section class="content">
+      <section class="page active" id="page-inicio">
+        <section class="home-dashboard" aria-label="Resumen operativo Novimed">
+          <div class="home-intro card">
+            <div>
+              <span class="hero-kicker">Flujo operativo</span>
+              <h1>Sofía Martínez necesita atención</h1>
+              <p>La pantalla inicial concentra lo urgente: alertas activas, atención médica, ficha del estudiante y comunicación con familias.</p>
+            </div>
+            <div class="home-actions">
+              <button type="button" class="btn primary" onclick="showPage('alertas')">Ver alertas</button>
+              <button type="button" class="btn secondary" onclick="showPage('atenciones')">Registrar atención médica</button>
+            </div>
+          </div>
+
+          <div class="kpis ux-kpis">
+            <div class="kpi"><small>Alertas activas</small><strong class="red" id="kpiAlerts">3</strong><em class="red">2 requieren atención</em></div>
+            <div class="kpi"><small>Atenciones hoy</small><strong id="kpiCare">27</strong><em class="green">todas documentadas</em></div>
+            <div class="kpi"><small>Familias informadas</small><strong class="green" id="kpiFamily">94%</strong><em class="green">confirmación registrada</em></div>
+            <div class="kpi"><small>Tiempo respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div>
+          </div>
+
+          <div class="workflow-grid">
+            <article class="card priority-card">
+              <div class="section-head"><h3>Incidente principal</h3><span class="badge red" id="mainBadge">Acción requerida</span></div>
+              <div class="student"><div class="avatar" id="mainStudentAvatar">SM</div><div><h4 id="mainStudentName">Sofía Martínez</h4><p id="mainStudentMeta">3° Secundaria — Aula 3B · 2° piso</p></div></div>
+              <div class="alert-note">Alergia conocida: maní</div>
+              <div class="symptoms"><small>Síntomas reportados</small><b id="mainSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</b></div>
+              <div class="actions"><button type="button" class="btn primary" id="openAttention">Atender y notificar</button><button type="button" class="btn secondary" id="openFicha">Ver ficha médica</button><button type="button" class="btn ghost" id="goDemo">Abrir flujo por roles</button></div>
+            </article>
+
+            <article class="card workflow-card">
+              <div class="section-head"><h3>Ruta de trabajo</h3><span class="badge blue">Orden sugerido</span></div>
+              <div class="flow-step"><div class="flow-num">1</div><div><b>Revisar alerta</b><p>Identificar prioridad y estudiante.</p></div></div>
+              <div class="flow-step"><div class="flow-num">2</div><div><b>Consultar ficha</b><p>Validar alergias, antecedentes y contactos.</p></div></div>
+              <div class="flow-step"><div class="flow-num">3</div><div><b>Registrar atención</b><p>Documentar EVA, zona, diagnóstico, acción y medicación.</p></div></div>
+              <div class="flow-step"><div class="flow-num">4</div><div><b>Notificar y cerrar</b><p>Familia informada, inventario actualizado y reporte disponible.</p></div></div>
+            </article>
+          </div>
+
+          <article class="card activity-card">
+            <div class="section-head"><h3>Actividad en tiempo real</h3><span class="badge green">Flujo activo</span></div>
+            <div class="feed" id="activityFeed"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="page" id="page-roles">
+        <div class="hero"><div class="hero-kicker">Vistas por rol</div><h1>Cada integrante puede mostrar una <span>experiencia diferente</span>.</h1><p>Estas vistas permiten revisar la operación de cada actor dentro del flujo institucional.</p><div class="role-switch"><button type="button" class="role-btn active" data-role="medico">Médico</button><button type="button" class="role-btn" data-role="docente">Docente</button><button type="button" class="role-btn" data-role="familia">Familia</button><button type="button" class="role-btn" data-role="directivo">Directivo</button></div></div>
+        <div id="role-medico" class="role-dashboard active"></div><div id="role-docente" class="role-dashboard"></div><div id="role-familia" class="role-dashboard"></div><div id="role-directivo" class="role-dashboard"></div>
+      </section>
+
+      <section class="page" id="page-alertas"><div class="section-head"><h3>Centro de alertas</h3><div style="display:flex;gap:10px;align-items:center"><span class="badge red">3 activas</span><button type="button" class="btn primary" onclick="openReportModal()">Nueva alerta</button></div></div><div class="card"><table class="table" id="alertsTable" aria-label="Tabla de alertas médicas"></table></div></section>
+      <section class="page" id="page-estudiantes">
+        <div class="section-head">
+          <h3>Estudiantes</h3>
+          <div style="display:flex;gap:10px;align-items:center"><span class="badge blue">Fichas activas</span><button type="button" class="btn primary" onclick="openStudentModal()">Nueva ficha médica</button></div>
+        </div>
+        <div class="card">
+          <table class="table" id="studentsTable" aria-label="Tabla de estudiantes y condiciones registradas"></table>
+        </div>
+      </section>
+      <section class="page" id="page-riesgo">
+        <div class="section-head"><h3>Priorización de riesgo</h3><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge blue">Priorización operativa</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Riesgo alto</small><strong class="red" id="riskHigh">0</strong><em class="red">requiere acción</em></div>
+          <div class="kpi"><small>Seguimiento</small><strong class="amber" id="riskMedium">0</strong><em class="amber">monitoreo activo</em></div>
+          <div class="kpi"><small>Estable</small><strong class="green" id="riskLow">0</strong><em class="green">control regular</em></div>
+          <div class="kpi"><small>Criterios evaluados</small><strong id="riskCriteria">6</strong><em class="green">por estudiante</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Priorización por estudiante</h3><span class="badge green">Calculado en tiempo real</span></div>
+            <table class="table" id="riskTable" aria-label="Tabla de semáforo de riesgo por estudiante"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Lógica del semáforo</h3><span class="badge amber">No diagnóstico</span></div>
+            <div id="riskLogic"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-atenciones">
+        <div class="section-head">
+          <h3>Registro médico escolar</h3>
+          <button type="button" class="btn primary" onclick="openAttentionModal()">Nueva atención médica</button>
+        </div>
+        <div class="card"><table class="table" id="careTable" aria-label="Tabla de atenciones registradas"></table></div>
+      </section>
+      <section class="page" id="page-vacunas">
+        <div class="section-head"><h3>Control de vacunas</h3><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge blue">Referencia MSP 2025</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Registros estudiantiles</small><strong id="vacTotal">0</strong><em class="green">en seguimiento</em></div>
+          <div class="kpi"><small>Al día</small><strong class="green" id="vacOk">0</strong><em class="green">según registro</em></div>
+          <div class="kpi"><small>Pendientes</small><strong class="red" id="vacPending">0</strong><em class="red">requieren verificación</em></div>
+          <div class="kpi"><small>Próxima revisión</small><strong class="amber" id="vacReview">0</strong><em class="amber">programadas</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Seguimiento por estudiante</h3><span class="badge green">Carné / certificado</span></div>
+            <table class="table" id="vaccinesTable" aria-label="Tabla de seguimiento de vacunas"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Esquema MSP para edad escolar</h3><span class="badge amber">No sustituye criterio médico</span></div>
+            <div id="vaccineSchedule"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-inventario">
+        <div class="section-head"><h3>Medicamentos disponibles</h3><div class="inventory-actions"><span class="badge blue">Control interno</span><button type="button" class="btn secondary" onclick="setRole('medico');showPage('roles')">Volver a Vista médico</button><button type="button" class="btn primary" onclick="openMedicineModal()">Añadir medicamento</button></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>Medicamentos activos</small><strong id="invTotal">0</strong><em class="green">registrados</em></div>
+          <div class="kpi"><small>Reposición requerida</small><strong class="red" id="invLow">0</strong><em class="red">bajo mínimo</em></div>
+          <div class="kpi"><small>Próximos a caducar</small><strong class="amber" id="invExpire">0</strong><em class="amber">revisión necesaria</em></div>
+          <div class="kpi"><small>Usos del mes</small><strong id="invUses">0</strong><em class="green">trazables</em></div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="section-head"><h3>Stock disponible</h3><span class="badge green">Actualizado</span></div>
+            <table class="table" id="inventoryTable" aria-label="Tabla de inventario de medicamentos"></table>
+          </article>
+          <article class="card">
+            <div class="section-head"><h3>Historial de uso</h3><span class="badge amber">Trazabilidad</span></div>
+            <div id="inventoryHistory"></div>
+          </article>
+        </div>
+      </section>
+      <section class="page" id="page-familias"><div class="grid"><article class="card"><div class="section-head"><h3>Notificaciones familiares</h3><span class="badge green">Lectura activa</span></div><div id="familyNotices"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreen"></div></div></article></div></section>
+      <section class="page" id="page-reportes"><div class="kpis"><div class="kpi"><small>Casos cerrados</small><strong class="green">24</strong><em class="green">89% del día</em></div><div class="kpi"><small>Promedio respuesta</small><strong>2m 34s</strong><em class="green">óptimo</em></div><div class="kpi"><small>Lecturas familia</small><strong class="green" id="reportRead">94%</strong><em>confirmadas</em></div><div class="kpi"><small>Riesgo alto</small><strong class="red">2</strong><em class="red">seguimiento</em></div></div><div class="cards3"><div class="card"><h3>Alertas por prioridad</h3><div class="chipline"><span class="chip red">Crítica 2</span><span class="chip amber">Media 6</span><span class="chip green">Baja 19</span></div></div><div class="card"><h3>Top motivos</h3><p>Dolor abdominal, golpes leves, mareos, fiebre y ansiedad escolar.</p></div><div class="card"><h3>Valor institucional</h3><p>Menos llamadas sueltas, más trazabilidad, mejores decisiones directivas.</p></div></div></section>
+      <section class="page" id="page-config"><div class="cards3"><div class="card"><h3>Roles</h3><p>Médico, docente, familia, directivo y administrador con accesos diferenciados.</p></div><div class="card"><h3>Notificaciones</h3><p>Alertas críticas, confirmación de lectura y recordatorios de seguimiento.</p></div><div class="card"><h3>Catálogos clínicos</h3><p>Síntomas frecuentes, medicamentos, alergias, vacunas y estados de atención.</p></div></div></section>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><input id="reportStudent" value="Sofía Martínez"></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" value="Aula 3B · 2° piso"></div></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</textarea></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
+<div class="modal" id="fichaModal" role="dialog" aria-modal="true" aria-labelledby="fichaModalTitle">
+  <div class="modal-box">
+    <h3 id="fichaModalTitle">Ficha médica estudiantil</h3>
+    <p>Información crítica disponible antes de intervenir.</p>
+    <div id="fichaContent"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('fichaModal')">Cerrar</button>
+      <button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="studentModal" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle">
+  <div class="modal-box">
+    <h3 id="studentModalTitle">Nueva ficha médica estudiantil</h3>
+    <p>Todos los campos son opcionales. La ficha puede completarse progresivamente.</p>
+
+    <div class="medical-form-section">
+      <h4>Datos personales</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newFullName">Nombre completo</label><input id="newFullName" placeholder="Nombre y apellidos"></div>
+        <div class="field"><label for="newBirthDate">Fecha de nacimiento</label><input id="newBirthDate" type="date"></div>
+        <div class="field"><label for="newAge">Edad</label><input id="newAge" placeholder="Ej. 9 años"></div>
+        <div class="field"><label for="newSex">Sexo</label><select id="newSex"><option value="">Sin especificar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></div>
+        <div class="field"><label for="newCourse">Curso / paralelo</label><input id="newCourse" placeholder="Ej. 6° A"></div>
+        <div class="field"><label for="newPhone">Teléfono</label><input id="newPhone" placeholder="Teléfono de contacto"></div>
+      </div>
+      <div class="field"><label for="newAddress">Dirección</label><input id="newAddress" placeholder="Dirección domiciliaria"></div>
+      <div class="field"><label for="newEmail">Correo electrónico</label><input id="newEmail" type="email" placeholder="correo@dominio.com"></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Contactos de emergencia</h4>
+      <div class="form-grid">
+        <div class="field"><label for="contact1Name">Contacto 1</label><input id="contact1Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact1Relation">Relación</label><input id="contact1Relation" placeholder="Madre, padre, tutor"></div>
+        <div class="field"><label for="contact1Phone">Teléfono</label><input id="contact1Phone" placeholder="Teléfono"></div>
+        <div class="field"><label for="contact2Name">Contacto 2</label><input id="contact2Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact2Relation">Relación</label><input id="contact2Relation" placeholder="Relación"></div>
+        <div class="field"><label for="contact2Phone">Teléfono</label><input id="contact2Phone" placeholder="Teléfono"></div>
+        <div class="field"><label for="contact3Name">Contacto 3</label><input id="contact3Name" placeholder="Nombre"></div>
+        <div class="field"><label for="contact3Relation">Relación</label><input id="contact3Relation" placeholder="Relación"></div>
+        <div class="field"><label for="contact3Phone">Teléfono</label><input id="contact3Phone" placeholder="Teléfono"></div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Historia clínica inicial</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newAllergies">Alergias</label><input id="newAllergies" placeholder="Alergias conocidas"></div>
+        <div class="field"><label for="newChronic">Enfermedades crónicas</label><input id="newChronic" placeholder="Enfermedades crónicas"></div>
+      </div>
+      <div class="field"><label for="newMedicines">Medicamentos habituales</label><textarea id="newMedicines" placeholder="Medicamentos de uso habitual"></textarea></div>
+      <div class="field"><label for="newRestrictions">Restricciones y consideraciones escolares</label><textarea id="newRestrictions" placeholder="Ej. evitar actividad física intensa, restricciones alimentarias, acompañamiento requerido"></textarea></div>
+      <div class="field"><label for="newMedicalNotes">Otra información médica importante</label><textarea id="newMedicalNotes" placeholder="Información relevante para el personal médico escolar"></textarea></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Seguro, vacunas y consentimientos</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newInsurance">Seguro médico</label><input id="newInsurance" placeholder="Seguro privado, IESS, ninguno u otro"></div>
+        <div class="field"><label for="newVaccineStatus">Estado de vacunación</label><select id="newVaccineStatus"><option value="">Sin registrar</option><option>Al día</option><option>Pendiente de verificación</option><option>Requiere actualización</option></select></div>
+        <div class="field"><label for="newMedicationAuth">Autorización de medicación básica</label><select id="newMedicationAuth"><option value="">Sin registrar</option><option>Autoriza</option><option>No autoriza</option></select></div>
+        <div class="field"><label for="newEmergencyTransfer">Traslado en emergencia</label><select id="newEmergencyTransfer"><option value="">Sin registrar</option><option>Autoriza</option><option>No autoriza</option></select></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('studentModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="saveStudentMedicalRecord()">Guardar ficha</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="attentionModal" role="dialog" aria-modal="true" aria-labelledby="attentionModalTitle">
+  <div class="modal-box">
+    <h3 id="attentionModalTitle">Registrar atención médica</h3>
+    <p>Vista del departamento médico. Todos los campos son opcionales.</p>
+
+    <div class="medical-form-section">
+      <h4>Identificación de la atención</h4>
+      <div class="form-grid">
+        <div class="field"><label for="careStudent">Estudiante</label><select id="careStudent"></select></div>
+        <div class="field"><label for="careStatus">Estado actual</label><select id="careStatus"><option value="">Sin especificar</option><option>En observación</option><option>Estable</option><option>Requiere seguimiento</option><option>Requiere derivación</option></select></div>
+        <div class="field"><label for="careEva">Escala EVA del dolor</label><select id="careEva"><option value="">Sin especificar</option><option>0 · Sin dolor</option><option>1 · Dolor muy leve</option><option>2 · Dolor leve</option><option>3 · Dolor leve</option><option>4 · Dolor moderado</option><option>5 · Dolor moderado</option><option>6 · Dolor moderado alto</option><option>7 · Dolor intenso</option><option>8 · Dolor muy intenso</option><option>9 · Dolor severo</option><option>10 · Máximo dolor</option></select></div>
+        <div class="field"><label for="careDerivation">Derivación</label><select id="careDerivation"><option value="">Sin especificar</option><option>No requiere derivación</option><option>Representante informado</option><option>Retiro por representante</option><option>Derivación a centro de salud</option><option>Emergencia externa</option></select></div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Área corporal afectada</h4>
+      <input type="hidden" id="careBodyArea">
+      <div class="body-area-selector">
+        <div class="body-avatar" aria-hidden="true">
+          <div class="body-avatar-figure" id="bodyAvatarFigure">
+            <span class="body-zone neck"></span>
+            <span class="body-zone abdomen"></span>
+            <span class="body-limb arm-left"></span>
+            <span class="body-limb arm-right"></span>
+            <span class="body-limb leg-left"></span>
+            <span class="body-limb leg-right"></span>
+          </div>
+        </div>
+        <div class="body-area-options" id="bodyAreaOptions">
+          <button type="button" class="area-btn" data-area="Cabeza">Cabeza</button>
+          <button type="button" class="area-btn" data-area="Cuello">Cuello</button>
+          <button type="button" class="area-btn" data-area="Tórax">Tórax</button>
+          <button type="button" class="area-btn" data-area="Abdomen">Abdomen</button>
+          <button type="button" class="area-btn" data-area="Brazo izquierdo">Brazo izquierdo</button>
+          <button type="button" class="area-btn" data-area="Brazo derecho">Brazo derecho</button>
+          <button type="button" class="area-btn" data-area="Pierna izquierda">Pierna izquierda</button>
+          <button type="button" class="area-btn" data-area="Pierna derecha">Pierna derecha</button>
+          <button type="button" class="area-btn" data-area="General / sin zona específica">General / sin zona específica</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Detalle clínico escolar</h4>
+      <div class="field"><label for="careSymptoms">Síntomas</label><textarea id="careSymptoms" placeholder="Síntomas observados o referidos por el estudiante"></textarea></div>
+      <div class="field"><label for="carePresumptiveDiagnosis">Diagnóstico presuntivo</label><textarea id="carePresumptiveDiagnosis" placeholder="Hipótesis inicial según valoración del personal médico"></textarea></div>
+      <div class="field"><label for="careActionDone">Acción realizada</label><textarea id="careActionDone" placeholder="Reposo, hidratación, curación, control, comunicación con familia, etc."></textarea></div>
+    </div>
+
+    <div class="medical-form-section">
+      <h4>Medicación y observaciones</h4>
+      <div class="form-grid">
+        <div class="field"><label for="careMedication">Medicamento administrado</label><select id="careMedication"></select></div>
+        <div class="field"><label for="careMedicationDose">Dosis / indicación</label><input id="careMedicationDose" placeholder="Ej. 1 unidad, dosis indicada, no aplica"></div>
+      </div>
+      <div class="field"><label for="careObservations">Observaciones</label><textarea id="careObservations" placeholder="Observaciones adicionales de la atención"></textarea></div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('attentionModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="submitCare()">Registrar y notificar familia</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="medicineModal" role="dialog" aria-modal="true" aria-labelledby="medicineModalTitle">
+  <div class="modal-box">
+    <h3 id="medicineModalTitle">Añadir medicamento al inventario</h3>
+    <p>Registro interno de stock médico escolar. Todos los campos son opcionales.</p>
+
+    <div class="medical-form-section">
+      <h4>Datos del medicamento / insumo</h4>
+      <div class="form-grid">
+        <div class="field"><label for="newMedicineName">Medicamento / insumo</label><input id="newMedicineName" placeholder="Ej. Paracetamol pediátrico"></div>
+        <div class="field"><label for="newMedicineCategory">Categoría</label><input id="newMedicineCategory" placeholder="Ej. Analgésico, antihistamínico, insumo"></div>
+        <div class="field"><label for="newMedicineStock">Stock inicial</label><input id="newMedicineStock" type="number" min="0" placeholder="Ej. 20"></div>
+        <div class="field"><label for="newMedicineMin">Stock mínimo</label><input id="newMedicineMin" type="number" min="0" placeholder="Ej. 10"></div>
+        <div class="field"><label for="newMedicineExpires">Fecha de caducidad</label><input id="newMedicineExpires" type="date"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('medicineModal')">Cancelar</button>
+      <button type="button" class="btn primary" onclick="saveMedicineToInventory()">Guardar medicamento</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="successModal" role="dialog" aria-modal="true" aria-labelledby="successTitle" aria-describedby="successText"><div class="modal-box success"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="36"><path d="m20 6-11 11-5-5"/></svg></div><h3 id="successTitle">Acción registrada</h3><p id="successText">El flujo fue actualizado correctamente.</p><div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal('successModal')">Continuar</button></div></div></div>
+
+<script>
+const state={
+  role:'medico',
+  alertSent:false,
+  careSaved:false,
+  familyRead:false,
+  selectedStudentIndex:0,
+  currentAlert:{studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',allergy:'Maní',alertTimeLabel:'10:24'},
+  students:[
+    {fullName:'Sofía Martínez',birthDate:'',age:'15 años',sex:'Femenino',course:'3° Secundaria · Aula 3B',address:'',phone:'+593 99 000 0000',email:'',contacts:[{name:'Ana Martínez',relation:'Madre',phone:'+593 99 000 0000'}],allergies:'Maní',chronic:'',medicines:'',restrictions:'Evitar consumo de maní y derivados.',medicalNotes:'Alergia alimentaria registrada. Requiere notificación familiar ante cualquier síntoma compatible.',insurance:'',vaccineStatus:'Pendiente de verificación',medicationAuth:'Sin registrar',emergencyTransfer:'Sin registrar'},
+    {fullName:'Mateo Ruiz',birthDate:'',age:'9 años',sex:'Masculino',course:'5° Básica · Aula 5A',address:'',phone:'',email:'',contacts:[],allergies:'',chronic:'Asma leve',medicines:'',restrictions:'Seguimiento preventivo en actividad física intensa.',medicalNotes:'',insurance:'',vaccineStatus:'Al día',medicationAuth:'Sin registrar',emergencyTransfer:'Sin registrar'},
+    {fullName:'Valentina Pérez',birthDate:'',age:'',sex:'Femenino',course:'7° Básica · Aula 7C',address:'',phone:'',email:'',contacts:[],allergies:'',chronic:'',medicines:'',restrictions:'',medicalNotes:'',insurance:'',vaccineStatus:'Al día',medicationAuth:'Sin registrar',emergencyTransfer:'Sin registrar'}
+  ],
+  activities:[
+    ['10:24','red','Nueva alerta de Sofía Martínez','Aula 3B · docente reporta síntomas'],
+    ['10:25','blue','Departamento médico notificado','María González recibió alerta'],
+    ['10:26','green','Ficha médica consultada','Alergia y contactos verificados'],
+    ['10:27','amber','Familia notificada','Ana Martínez pendiente de lectura']
+  ],
+  riskProfiles:[
+    {student:'Sofía Martínez',course:'3° Secundaria · Aula 3B',condition:'Alergia registrada: maní',critical:true,activeAlert:true,openCase:true,careCountMonth:2,vaccineStatus:'Pendiente de verificación',familyRead:false,action:'Atención prioritaria y verificación familiar'},
+    {student:'Mateo Ruiz',course:'5° Básica · Aula 5A',condition:'Asma leve',critical:true,activeAlert:false,openCase:false,careCountMonth:1,vaccineStatus:'Al día',familyRead:true,action:'Seguimiento preventivo'},
+    {student:'Valentina Pérez',course:'7° Básica · Aula 7C',condition:'Sin alertas críticas',critical:false,activeAlert:false,openCase:false,careCountMonth:1,vaccineStatus:'Al día',familyRead:true,action:'Control regular'}
+  ],
+  vaccines:[
+    {student:'Sofía Martínez',course:'3° Secundaria · Aula 3B',age:'15 años',reference:'dT · Difteria y tétanos',status:'Pendiente de verificación',last:'No registrado',next:'Solicitar carné actualizado'},
+    {student:'Mateo Ruiz',course:'5° Básica · Aula 5A',age:'9 años',reference:'HPV · Virus del Papiloma Humano · dosis única',status:'Al día',last:'Registrado en carné',next:'Control anual'}
+  ],
+  vaccineSchedule:[
+    ['5 años','DPT','Difteria, Tosferina, Tétanos'],
+    ['5 años','bOPV','Poliomielitis'],
+    ['9 años','HPV','Virus del Papiloma Humano · dosis única'],
+    ['15 años','dT','Difteria y tétanos']
+  ],
+  inventory:[
+    {name:'Paracetamol pediátrico',category:'Analgésico',stock:18,min:12,expires:'2026-11-30',status:'Disponible'},
+    {name:'Suero oral',category:'Hidratación',stock:7,min:10,expires:'2026-09-15',status:'Reponer'},
+    {name:'Loratadina',category:'Antihistamínico',stock:14,min:8,expires:'2027-02-20',status:'Disponible'},
+    {name:'Gasas estériles',category:'Insumo',stock:9,min:15,expires:'2026-08-10',status:'Reponer'}
+  ],
+  inventoryHistory:[
+    ['10:18','Paracetamol pediátrico','1 unidad','Sofía Martínez','Dolor moderado'],
+    ['09:35','Gasas estériles','2 unidades','Mateo Ruiz','Golpe leve'],
+    ['08:18','Suero oral','1 unidad','Valentina Pérez','Mareo']
+  ],
+  careRecords:[
+    {date:'21/06/2026',time:'10:27',student:'Sofía Martínez',bodyArea:'Abdomen',eva:'5 · Dolor moderado',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',presumptiveDiagnosis:'Dolor abdominal en observación',actionDone:'Observación, control y notificación a representante',medication:'No registrado',dose:'',derivation:'Representante informado',observations:'Estudiante consciente y orientada.',family:'Pendiente'},
+    {date:'21/06/2026',time:'09:35',student:'Mateo Ruiz',bodyArea:'Pierna derecha',eva:'3 · Dolor leve',symptoms:'Golpe leve durante actividad escolar.',presumptiveDiagnosis:'Contusión leve',actionDone:'Control y reposo breve',medication:'No administrado',dose:'',derivation:'No requiere derivación',observations:'Caso cerrado.',family:'Confirmada'},
+    {date:'21/06/2026',time:'08:18',student:'Valentina Pérez',bodyArea:'General / sin zona específica',eva:'2 · Dolor leve',symptoms:'Mareo.',presumptiveDiagnosis:'Malestar general leve',actionDone:'Hidratación y observación',medication:'No administrado',dose:'',derivation:'No requiere derivación',observations:'Evolución favorable.',family:'Confirmada'}
+  ]
+};
+const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
+function el(id){return document.getElementById(id)}
+
+/* V30 — Persistencia local: los registros creados en sesión sobreviven a recargas.
+   Solo persiste colecciones de datos; el caso activo sigue sincronizado vía Firestore. */
+const NOVIMED_STORAGE_KEY='novimed_local_state_v1';
+function persistState(){
+  try{
+    localStorage.setItem(NOVIMED_STORAGE_KEY,JSON.stringify({
+      students:state.students,
+      inventory:state.inventory,
+      inventoryHistory:state.inventoryHistory,
+      careRecords:state.careRecords,
+      vaccines:state.vaccines,
+      riskProfiles:state.riskProfiles
+    }));
+  }catch(e){/* almacenamiento no disponible: la app sigue funcionando en memoria */}
+}
+function restoreState(){
+  try{
+    const raw=localStorage.getItem(NOVIMED_STORAGE_KEY);
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(!saved || typeof saved!=='object') return;
+    ['students','inventory','inventoryHistory','careRecords','vaccines','riskProfiles'].forEach(key=>{
+      if(Array.isArray(saved[key]) && saved[key].length) state[key]=saved[key];
+    });
+  }catch(e){/* datos corruptos: se ignoran y se usa el estado base */}
+}
+restoreState();
+function showToast(t,txt){el('toastTitle').textContent=t;el('toastText').textContent=txt;el('toast').classList.add('show');setTimeout(()=>el('toast').classList.remove('show'),2800)}
+function activeAlert(){return state.currentAlert||{studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',allergy:'Maní',alertTimeLabel:'10:24'}}
+function showPage(page){const targetPage=el('page-'+page);if(!targetPage)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));targetPage.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>{const isActive=b.dataset.page===page;b.classList.toggle('active',isActive);if(isActive){b.setAttribute('aria-current','page')}else{b.removeAttribute('aria-current')}});const titles={inicio:['Centro de bienestar institucional','Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.'],roles:['Roles funcionales','Docente, médico, familia y directivo conectados.'],alertas:['Centro de alertas','Priorización de emergencias escolares.'],estudiantes:['Estudiantes','Fichas médicas y antecedentes relevantes.'],atenciones:['Registro médico escolar','Atenciones clínicas escolares documentadas.'],riesgo:['Priorización de riesgo','Priorización operativa basada en alertas, antecedentes y seguimiento.'],vacunas:['Control de vacunas','Registro y seguimiento según esquema nacional MSP.'],familias:['Familias','Notificaciones y confirmaciones de lectura.'],reportes:['Reportes','Indicadores para decisiones directivas.'],inventario:['Medicamentos disponibles','Stock, caducidad, reposición e historial de uso.'],config:['Configuración','Roles, notificaciones y catálogos clínicos.']};const t=titles[page]||['Novimed','Centro de bienestar institucional.'];el('pageTitle').textContent=t[0];el('pageSub').textContent=t[1];renderAll()}
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
+function setRole(role){state.role=role;const d=roleData[role];el('sidebarAvatar').textContent=d[0];el('sidebarName').textContent=d[1];el('sidebarRole').textContent=d[2];document.querySelectorAll('.role-btn').forEach(b=>b.classList.toggle('active',b.dataset.role===role));document.querySelectorAll('.role-dashboard').forEach(x=>x.classList.remove('active'));const pane=el('role-'+role);if(pane)pane.classList.add('active');showToast('Vista cambiada',d[1]+' ahora está usando Novimed.');renderAll()}
+document.querySelectorAll('.role-btn').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
+const DOT_COLORS={red:'red',blue:'blue',green:'green',amber:'amber'};
+function renderFeed(){el('activityFeed').innerHTML=state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}
+function renderAlerts(){const c=activeAlert();const rows=[[c.alertTimeLabel||'Ahora',c.studentName||'Estudiante sin nombre','Alta',state.careSaved?'Atendida':'Pendiente'],['09:50','Mateo Ruiz','Media','En seguimiento'],['08:41','Valentina Pérez','Baja','Cerrada']];el('alertsTable').innerHTML='<tr><th scope="col">Hora</th><th scope="col">Estudiante</th><th scope="col">Prioridad</th><th scope="col">Estado</th><th scope="col">Acción</th></tr>'+rows.map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${escapeHtml(r[1])}</td><td>${escapeHtml(r[2])}</td><td>${escapeHtml(r[3])}</td><td><button type="button" class="btn secondary" onclick="openFichaModal()">Revisar</button></td></tr>`).join('')}
+function renderCare(){
+  const rows=(state.careRecords||[]).map(r=>`<tr><td>${escapeHtml(r.date||'Sin registrar')}</td><td>${escapeHtml(r.time||'Sin registrar')}</td><td>${escapeHtml(r.student||'Sin especificar')}</td><td>${escapeHtml(r.bodyArea||'Sin especificar')}</td><td>${escapeHtml(r.eva||'Sin especificar')}</td><td>${escapeHtml(r.symptoms||'Sin especificar')}</td><td>${escapeHtml(r.presumptiveDiagnosis||'Sin especificar')}</td><td>${escapeHtml(r.actionDone||'Sin especificar')}</td><td>${escapeHtml(r.medication||'Sin especificar')}</td><td>${escapeHtml(r.derivation||'Sin especificar')}</td><td>${escapeHtml(r.family||'Pendiente')}</td></tr>`).join('');
+  el('careTable').innerHTML='<tr><th scope="col">Fecha</th><th scope="col">Hora</th><th scope="col">Estudiante</th><th scope="col">Área</th><th scope="col">EVA</th><th scope="col">Síntomas</th><th scope="col">Diagnóstico presuntivo</th><th scope="col">Acción realizada</th><th scope="col">Medicamento</th><th scope="col">Derivación</th><th scope="col">Familia</th></tr>'+rows;
+}
+function renderFamily(){const status=state.familyRead?'Confirmación recibida':'Pendiente de lectura';el('familyNotices').innerHTML=`<div class="flow-step"><div class="flow-num">1</div><div><b>Ana Martínez</b><p>Sofía fue atendida por mareo y dolor abdominal. Estado: en observación.</p><div class="chipline" style="margin-top:8px"><span class="chip ${state.familyRead?'green':'red'}">${status}</span></div></div></div><div class="actions" style="margin-top:14px"><button type="button" class="btn primary" onclick="confirmFamilyRead()">Simular confirmación familiar</button></div>`;el('phoneScreen').innerHTML=`<div class="screen-top"><div><h4>Novimed</h4><span class="mini">App para familias</span></div><span class="mini">9:41</span></div><div class="parent-card"><b>Hola, Ana</b><span>Madre de Sofía Martínez</span></div><div class="notif-mobile"><b>Atención en enfermería</b><p>Sofía fue atendida por mareo y dolor abdominal. Estado actual: en observación.</p></div><div class="confirm"><b>${state.familyRead?'Confirmación enviada':'Confirmación pendiente'}</b><p>${state.familyRead?'La institución ya registró tu lectura.':'Presiona confirmar para registrar que recibiste la información.'}</p></div><button type="button" class="btn primary" style="width:100%;margin-top:14px" onclick="confirmFamilyRead()">Confirmar lectura</button><div class="bottom-nav"><span>Inicio</span><span>Alertas</span><span>Historial</span></div>`}
+
+
+
+function valueOrDash(v){return (v && String(v).trim()) ? String(v).trim() : 'Sin registrar'}
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function getInitials(name){
+  const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return 'NE';
+  return (parts[0][0]+(parts[1]?.[0]||'')).toUpperCase();
+}
+function calculateAgeFromBirthDate(birthDate){
+  if(!birthDate) return '';
+  const birth=new Date(birthDate+'T00:00:00');
+  if(Number.isNaN(birth.getTime())) return '';
+  const today=new Date();
+  let age=today.getFullYear()-birth.getFullYear();
+  const m=today.getMonth()-birth.getMonth();
+  if(m<0 || (m===0 && today.getDate()<birth.getDate())) age--;
+  return age>=0 ? age+' años' : '';
+}
+function conditionSummary(student){
+  const parts=[];
+  if(student.allergies) parts.push('Alergia: '+student.allergies);
+  if(student.chronic) parts.push('Crónico: '+student.chronic);
+  if(student.restrictions) parts.push('Restricción escolar registrada');
+  return parts.join(' · ') || 'Sin alertas críticas';
+}
+function renderStudents(){
+  const table=el('studentsTable');
+  if(!table) return;
+  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Curso</th><th scope="col">Condición registrada</th><th scope="col">Vacunación</th><th scope="col">Acción</th></tr>'+state.students.map((s,index)=>{
+    return `<tr><td>${escapeHtml(valueOrDash(s.fullName))}<br><span style="color:#71819b;font-size:12px">${escapeHtml(valueOrDash(s.age))}</span></td><td>${escapeHtml(valueOrDash(s.course))}</td><td>${escapeHtml(conditionSummary(s))}</td><td>${escapeHtml(valueOrDash(s.vaccineStatus))}</td><td><button type="button" class="btn secondary" onclick="openFichaModal(${index})">Ver ficha</button></td></tr>`;
+  }).join('');
+}
+function openStudentModal(){
+  [
+    'newFullName','newBirthDate','newAge','newSex','newCourse','newPhone','newAddress','newEmail',
+    'contact1Name','contact1Relation','contact1Phone','contact2Name','contact2Relation','contact2Phone','contact3Name','contact3Relation','contact3Phone',
+    'newAllergies','newChronic','newMedicines','newRestrictions','newMedicalNotes','newInsurance','newVaccineStatus','newMedicationAuth','newEmergencyTransfer'
+  ].forEach(id=>{const node=el(id); if(node) node.value='';});
+  openModal('studentModal');
+}
+function readOptional(id){const node=el(id);return node ? node.value.trim() : ''}
+function saveStudentMedicalRecord(){
+  const fullName=readOptional('newFullName') || 'Estudiante sin nombre';
+  const birthDate=readOptional('newBirthDate');
+  const age=readOptional('newAge') || calculateAgeFromBirthDate(birthDate);
+  const contacts=[
+    {name:readOptional('contact1Name'),relation:readOptional('contact1Relation'),phone:readOptional('contact1Phone')},
+    {name:readOptional('contact2Name'),relation:readOptional('contact2Relation'),phone:readOptional('contact2Phone')},
+    {name:readOptional('contact3Name'),relation:readOptional('contact3Relation'),phone:readOptional('contact3Phone')}
+  ].filter(c=>c.name || c.relation || c.phone);
+  const student={
+    fullName,
+    birthDate,
+    age,
+    sex:readOptional('newSex'),
+    course:readOptional('newCourse'),
+    address:readOptional('newAddress'),
+    phone:readOptional('newPhone'),
+    email:readOptional('newEmail'),
+    contacts,
+    allergies:readOptional('newAllergies'),
+    chronic:readOptional('newChronic'),
+    medicines:readOptional('newMedicines'),
+    restrictions:readOptional('newRestrictions'),
+    medicalNotes:readOptional('newMedicalNotes'),
+    insurance:readOptional('newInsurance'),
+    vaccineStatus:readOptional('newVaccineStatus'),
+    medicationAuth:readOptional('newMedicationAuth'),
+    emergencyTransfer:readOptional('newEmergencyTransfer')
+  };
+  if(window.novimedCloudReady && window.novimedCloudAddStudent){
+    window.novimedCloudAddStudent(student).catch(err=>{
+      console.error('Ficha a nube:',err);
+      state.students.push(student);
+      renderAll();
+      showToast('Guardado local','La ficha no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
+    });
+  }else{
+    state.students.push(student);
+  }
+  closeModal('studentModal');
+  showSuccess('Ficha médica guardada','La ficha estudiantil fue creada y quedó disponible en el módulo Estudiantes.');
+  renderAll();
+  showPage('estudiantes');
+}
+function renderFicha(student){
+  const content=el('fichaContent');
+  if(!content) return;
+  const contacts=(student.contacts||[]).length ? student.contacts.map((c,i)=>`<div class="ficha-item"><small>Contacto ${i+1}</small><b>${escapeHtml(valueOrDash(c.name))}<br>${escapeHtml(valueOrDash(c.relation))}<br>${escapeHtml(valueOrDash(c.phone))}</b></div>`).join('') : '<div class="ficha-item"><small>Contactos</small><b>Sin registrar</b></div>';
+  const critical=[student.allergies && 'Alergias: '+student.allergies, student.chronic && 'Enfermedades crónicas: '+student.chronic, student.restrictions && 'Restricciones: '+student.restrictions].filter(Boolean).join(' · ');
+  content.innerHTML=`
+    <div class="student" style="margin-top:18px">
+      <div class="avatar">${escapeHtml(getInitials(student.fullName))}</div>
+      <div><h4>${escapeHtml(valueOrDash(student.fullName))}</h4><p>${escapeHtml(valueOrDash(student.course))}</p></div>
+    </div>
+    ${critical ? `<div class="ficha-critical">${escapeHtml(critical)}</div>` : `<div class="alert-note">Sin alertas médicas críticas registradas.</div>`}
+    <div class="ficha-summary">
+      <div class="ficha-item"><small>Fecha nacimiento</small><b>${escapeHtml(valueOrDash(student.birthDate))}</b></div>
+      <div class="ficha-item"><small>Edad</small><b>${escapeHtml(valueOrDash(student.age))}</b></div>
+      <div class="ficha-item"><small>Sexo</small><b>${escapeHtml(valueOrDash(student.sex))}</b></div>
+      <div class="ficha-item"><small>Teléfono</small><b>${escapeHtml(valueOrDash(student.phone))}</b></div>
+      <div class="ficha-item"><small>Correo</small><b>${escapeHtml(valueOrDash(student.email))}</b></div>
+      <div class="ficha-item"><small>Dirección</small><b>${escapeHtml(valueOrDash(student.address))}</b></div>
+      ${contacts}
+      <div class="ficha-item"><small>Medicamentos habituales</small><b>${escapeHtml(valueOrDash(student.medicines))}</b></div>
+      <div class="ficha-item"><small>Seguro médico</small><b>${escapeHtml(valueOrDash(student.insurance))}</b></div>
+      <div class="ficha-item"><small>Vacunación</small><b>${escapeHtml(valueOrDash(student.vaccineStatus))}</b></div>
+      <div class="ficha-item"><small>Medicación básica</small><b>${escapeHtml(valueOrDash(student.medicationAuth))}</b></div>
+      <div class="ficha-item"><small>Traslado emergencia</small><b>${escapeHtml(valueOrDash(student.emergencyTransfer))}</b></div>
+    </div>
+    <div class="field"><label for="fichaMedicalNotesView">Otra información médica importante</label><textarea id="fichaMedicalNotesView" readonly>${escapeHtml(valueOrDash(student.medicalNotes))}</textarea></div>
+  `;
+}
+
+
+
+function calculateRisk(profile){
+  let score=0;
+  const factors=[];
+  if(profile.activeAlert){score+=30;factors.push('alerta activa');}
+  if(profile.openCase){score+=15;factors.push('caso abierto');}
+  if(profile.critical){score+=25;factors.push('antecedente crítico');}
+  if(profile.careCountMonth>=3){score+=15;factors.push('atenciones recurrentes');}
+  else if(profile.careCountMonth>0){score+=7;factors.push('atención reciente');}
+  if(profile.vaccineStatus && profile.vaccineStatus.includes('Pendiente')){score+=10;factors.push('vacuna pendiente de verificación');}
+  if(!profile.familyRead){score+=10;factors.push('confirmación familiar pendiente');}
+  score=Math.min(score,100);
+  let level='Bajo', cls='green', action='Control regular';
+  if((profile.activeAlert && profile.critical) || score>=70){
+    level='Alto'; cls='red'; action='Requiere revisión prioritaria';
+  }else if(score>=35){
+    level='Medio'; cls='amber'; action='Mantener seguimiento';
+  }
+  return {score,level,cls,action,factors};
+}
+function syncRiskState(){
+  const sofia=state.riskProfiles.find(r=>r.student==='Sofía Martínez');
+  if(sofia){
+    sofia.openCase=!state.careSaved;
+    sofia.familyRead=state.familyRead;
+  }
+}
+function renderRisk(){
+  syncRiskState();
+  const table=el('riskTable');
+  const logic=el('riskLogic');
+  if(!table || !logic) return;
+  const evaluated=state.riskProfiles.map(p=>({profile:p,risk:calculateRisk(p)}));
+  const high=evaluated.filter(x=>x.risk.cls==='red').length;
+  const medium=evaluated.filter(x=>x.risk.cls==='amber').length;
+  const low=evaluated.filter(x=>x.risk.cls==='green').length;
+  el('riskHigh').textContent=high;
+  el('riskMedium').textContent=medium;
+  el('riskLow').textContent=low;
+  const pill=el('riskPill');
+  if(pill) pill.textContent=high;
+  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+evaluated.map(({profile,risk})=>{
+    return `<tr><td>${escapeHtml(profile.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(profile.course)}</span></td><td>${escapeHtml(profile.condition)}</td><td><span class="chip ${risk.cls}">${risk.level}</span></td><td><div class="risk-score"><span>${risk.score}/100</span><div class="risk-meter"><div class="risk-fill ${risk.cls}" style="width:${risk.score}%"></div></div></div></td><td>${escapeHtml(risk.factors.join(', ') || 'sin factores activos')}</td><td>${escapeHtml(profile.action)}</td></tr>`;
+  }).join('');
+  logic.innerHTML=[
+    ['Rojo','Se activa cuando existe alerta activa junto con antecedente crítico, o cuando el puntaje total alcanza nivel alto.'],
+    ['Amarillo','Se usa para estudiantes con condiciones que requieren seguimiento, atenciones recientes o verificaciones pendientes.'],
+    ['Verde','Indica control regular: sin alerta activa, sin caso abierto y sin factores críticos activos.'],
+    ['Criterios evaluados','Alerta activa, caso abierto, antecedente crítico, atenciones recientes, vacunas pendientes y confirmación familiar.']
+  ].map((r,i)=>`<div class="risk-rule"><b>${r[0]}</b><p>${r[1]}</p></div>`).join('')+`<p style="color:#71819b;font-size:12px;line-height:1.45;margin-top:12px">Este semáforo prioriza la gestión escolar interna. No diagnostica, no reemplaza la valoración del departamento médico y solo ordena la atención según datos registrados en Novimed.</p>`;
+}
+
+function renderVaccines(){
+  const table=el('vaccinesTable');
+  const schedule=el('vaccineSchedule');
+  if(!table || !schedule) return;
+  const ok=state.vaccines.filter(v=>v.status==='Al día').length;
+  const pending=state.vaccines.filter(v=>v.status.includes('Pendiente')).length;
+  const review=state.vaccines.filter(v=>v.status.includes('Próxima')).length;
+  el('vacTotal').textContent=state.vaccines.length;
+  el('vacOk').textContent=ok;
+  el('vacPending').textContent=pending;
+  el('vacReview').textContent=review;
+  const pill=el('vaccinePill');
+  if(pill) pill.textContent=pending + review;
+  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Edad</th><th scope="col">Referencia MSP</th><th scope="col">Estado</th><th scope="col">Próxima acción</th></tr>'+state.vaccines.map(v=>{
+    const cls=v.status==='Al día'?'green':(v.status.includes('Pendiente')?'red':'amber');
+    return `<tr><td>${escapeHtml(v.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course)}</span></td><td>${escapeHtml(v.age)}</td><td>${escapeHtml(v.reference)}</td><td><span class="chip ${cls}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.next)}</td></tr>`;
+  }).join('');
+  schedule.innerHTML=state.vaccineSchedule.map((v,i)=>`<div class="flow-step"><div class="flow-num">${v[0]}</div><div><b>${v[1]}</b><p>${v[2]}</p></div></div>`).join('')+`<p style="color:#71819b;font-size:12px;line-height:1.45;margin-top:14px">Referencia: Esquema Nacional de Vacunación Ecuador 2025 del Ministerio de Salud Pública. Este módulo registra seguimiento escolar y verificación documental; no diagnostica ni reemplaza la validación del personal de salud.</p>`;
+}
+
+function formatDateTime24(date=new Date()){
+  const pad=n=>String(n).padStart(2,'0');
+  return {
+    date:`${pad(date.getDate())}/${pad(date.getMonth()+1)}/${date.getFullYear()}`,
+    time:`${pad(date.getHours())}:${pad(date.getMinutes())}`
+  };
+}
+function parsePositiveInt(value, fallback=0){
+  const n=parseInt(value,10);
+  return Number.isFinite(n) && n>=0 ? n : fallback;
+}
+function inventoryStatus(item){
+  const exp = new Date(item.expires + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const days = Math.ceil((exp - today) / 86400000);
+  if(item.stock <= item.min) return ['red','Reponer'];
+  if(days <= 90) return ['amber','Caduca pronto'];
+  return ['green','Disponible'];
+}
+function renderInventory(){
+  const table=el('inventoryTable');
+  const history=el('inventoryHistory');
+  if(!table || !history) return;
+  const low=state.inventory.filter(i=>i.stock<=i.min).length;
+  const expiring=state.inventory.filter(i=>{const today=new Date();today.setHours(0,0,0,0);return Math.ceil((new Date(i.expires+'T00:00:00')-today)/86400000)<=90}).length;
+  el('invTotal').textContent=state.inventory.length;
+  el('invLow').textContent=low;
+  el('invExpire').textContent=expiring;
+  el('invUses').textContent=state.inventoryHistory.length;
+  const pill=el('inventoryPill');
+  if(pill) pill.textContent=low;
+  table.innerHTML='<tr><th scope="col">Medicamento / insumo</th><th scope="col">Categoría</th><th scope="col">Stock disponible</th><th scope="col">Stock mínimo</th><th scope="col">Caducidad</th><th scope="col">Reposición</th><th scope="col">Acción</th></tr>'+state.inventory.map((item,index)=>{
+    const st=inventoryStatus(item);
+    const reorder=item.stock<=item.min?'Solicitar reposición':'Stock suficiente';
+    return `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.category)}</td><td>${item.stock} unidades</td><td>${item.min} unidades</td><td>${escapeHtml(item.expires||'Sin registrar')}</td><td><span class="chip ${st[0]}">${reorder}</span></td><td><button type="button" class="btn secondary" onclick="registerInventoryUse(${index})">Registrar uso</button></td></tr>`;
+  }).join('');
+  history.innerHTML=state.inventoryHistory.map(h=>`<div class="flow-step"><div class="flow-num">${escapeHtml(h[0])}</div><div><b>${escapeHtml(h[1])} · ${escapeHtml(h[2])}</b><p>${escapeHtml(h[3])} — ${escapeHtml(h[4])}</p></div></div>`).join('');
+}
+function registerInventoryUse(index, contextStudent='Registro interno', contextReason='Uso documentado desde inventario', notify=true){
+  const item=state.inventory[index];
+  if(!item || item.stock<=0) return false;
+  const stamp=formatDateTime24();
+  const logEntry={time:stamp.time,name:item.name,qty:'1 unidad',student:contextStudent,context:contextReason};
+  if(window.novimedCloudReady && item.id && window.novimedCloudUseInventory){
+    window.novimedCloudUseInventory(item.id, logEntry).catch(err=>{
+      console.error('Uso de inventario a nube:',err);
+      showToast('Registro local','El movimiento no llegó a la nube ('+(err.code||'error')+').');
+      item.stock-=1;
+      state.inventoryHistory.unshift([logEntry.time,logEntry.name,logEntry.qty,logEntry.student,logEntry.context]);
+      renderInventory();
+    });
+  }else{
+    item.stock-=1;
+    state.inventoryHistory.unshift([logEntry.time,logEntry.name,logEntry.qty,logEntry.student,logEntry.context]);
+  }
+  if(notify){
+    showSuccess('Uso registrado','El stock fue actualizado y el movimiento quedó en el historial.');
+  }
+  renderInventory();
+  return true;
+}
+function openMedicineModal(){
+  ['newMedicineName','newMedicineCategory','newMedicineStock','newMedicineMin','newMedicineExpires'].forEach(id=>{const node=el(id); if(node) node.value='';});
+  openModal('medicineModal');
+}
+function saveMedicineToInventory(){
+  const item={
+    name:readOptional('newMedicineName') || 'Medicamento sin nombre',
+    category:readOptional('newMedicineCategory') || 'Sin categoría',
+    stock:parsePositiveInt(readOptional('newMedicineStock'),0),
+    min:parsePositiveInt(readOptional('newMedicineMin'),0),
+    expires:readOptional('newMedicineExpires') || 'Sin registrar',
+    status:'Disponible'
+  };
+  if(window.novimedCloudReady && window.novimedCloudAddInventoryItem){
+    window.novimedCloudAddInventoryItem(item).catch(err=>{
+      console.error('Medicamento a nube:',err);
+      state.inventory.push(item);
+      renderAll();
+      showToast('Guardado local','El medicamento no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
+    });
+  }else{
+    state.inventory.push(item);
+  }
+  closeModal('medicineModal');
+  showSuccess('Medicamento agregado','El medicamento quedó registrado en inventario y disponible para futuras atenciones.');
+  renderAll();
+  showPage('inventario');
+}
+function renderRoles(){el('role-medico').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">MG</div><div><h3>Panel médico de atención</h3><p>Desde aquí se consulta Ficha Médica, Registra Atención, Revisa Riesgo, Vacunas e Inventario.</p></div></div><div class="actions"><button type="button" class="btn secondary" onclick="openFichaModal()">Ver ficha médica</button><button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button><button type="button" class="btn secondary" onclick="showPage('riesgo')">Revisar riesgo</button><button type="button" class="btn secondary" onclick="showPage('vacunas')">Control de vacunas</button><button type="button" class="btn secondary" onclick="showPage('inventario')">Medicamentos disponibles</button></div></article><article class="card"><div class="section-head"><h3>Flujo clínico</h3><span class="badge green">Activo</span></div><div class="feed">${state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}</div></article></div>`;
+el('role-docente').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">LC</div><div><h3>Vista docente</h3><p>Registra un incidente desde el aula sin perder tiempo.</p></div></div><div class="field"><label for="roleDocenteStudent">Estudiante</label><input id="roleDocenteStudent" value="Sofía Martínez"></div><div class="field"><label for="roleDocenteSymptoms">Síntomas observados</label><textarea id="roleDocenteSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</textarea></div><button type="button" class="btn primary" onclick="openReportModal()">Reportar emergencia</button></article><article class="card"><h3>Estado de alerta</h3><br><p style="color:#71819b">Al reportar la emergencia, el departamento médico recibirá la notificación y el caso pasará al centro de alertas.</p></article></div>`;
+el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
+el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="green">${state.familyRead?'96%':'94%'}</strong><em>actualizado</em></div><div class="kpi"><small>Casos críticos</small><strong class="red">2</strong><em class="red">seguimiento</em></div><div class="kpi"><small>Respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div></div><div class="card"><h3>Trazabilidad del caso Sofía Martínez</h3><br><table class="table"><tr><th>Momento</th><th>Acción</th><th>Responsable</th></tr><tr><td>10:24</td><td>Alerta reportada</td><td>Docente</td></tr><tr><td>10:25</td><td>Ficha consultada</td><td>Departamento médico</td></tr><tr><td>10:27</td><td>Familia notificada</td><td>Novimed</td></tr><tr><td>10:29</td><td>${state.familyRead?'Lectura confirmada':'Lectura pendiente'}</td><td>Familia</td></tr></table></div>`}
+
+function populateAttentionOptions(){
+  const studentSelect=el('careStudent');
+  if(studentSelect){
+    studentSelect.innerHTML=(state.students||[]).map((s,i)=>`<option value="${i}" ${i===state.selectedStudentIndex?'selected':''}>${escapeHtml(s.fullName||'Estudiante sin nombre')}</option>`).join('');
+  }
+  const medSelect=el('careMedication');
+  if(medSelect){
+    medSelect.innerHTML='<option value="">Sin medicamento administrado</option>'+(state.inventory||[]).map((m,i)=>`<option value="${i}">${escapeHtml(m.name)} · stock ${m.stock}</option>`).join('')+'<option value="otro">Otro / no registrado en inventario</option>';
+  }
+}
+function setBodyArea(area){
+  const input=el('careBodyArea');
+  const avatar=el('bodyAvatarFigure');
+  if(input) input.value=area;
+  document.querySelectorAll('#bodyAreaOptions .area-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.area===area));
+  if(avatar){
+    if(area && area!=='General / sin zona específica') avatar.dataset.area=area;
+    else avatar.removeAttribute('data-area');
+  }
+}
+function clearAttentionForm(){
+  ['careSymptoms','carePresumptiveDiagnosis','careActionDone','careMedicationDose','careObservations','careBodyArea'].forEach(id=>{const node=el(id);if(node)node.value='';});
+  ['careStatus','careEva','careDerivation','careMedication'].forEach(id=>{const node=el(id);if(node)node.selectedIndex=0;});
+  document.querySelectorAll('#bodyAreaOptions .area-btn').forEach(btn=>btn.classList.remove('active'));
+  const avatar=el('bodyAvatarFigure');
+  if(avatar) avatar.removeAttribute('data-area');
+}
+function careCountToday(){
+  const today=formatDateTime24().date;
+  return (state.careRecords||[]).filter(r=>r && r.date===today).length;
+}
+function renderAll(){renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;el('kpiAlerts').textContent=state.careSaved?'2':'3';el('kpiCare').textContent=careCountToday();el('kpiFamily').textContent=state.familyRead?'96%':'94%';el('reportRead').textContent=state.familyRead?'96%':'94%';el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');persistState()}
+let lastFocusedBeforeModal=null;
+function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
+function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){openModal('reportModal')}function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
+function submitTeacherAlert(){const student=(el('reportStudent')?.value||'Estudiante sin nombre').trim();const location=(el('reportRoom')?.value||'Ubicación sin registrar').trim();const symptoms=(el('reportSymptoms')?.value||'Síntomas sin especificar').trim();state.currentAlert={studentName:student,location,symptoms,allergy:'Maní',alertTimeLabel:'Ahora'};state.alertSent=true;state.activities.unshift(['Ahora','red',`Nueva alerta de ${student}`,`${location} · docente reporta síntomas`]);closeModal('reportModal');showSuccess('Alerta enviada','El departamento médico recibió la notificación en tiempo real.');renderAll();showPage('alertas')}
+function submitCare(){
+  let selectedIndex=parseInt(el('careStudent')?.value || state.selectedStudentIndex || 0,10);
+  if(!Number.isFinite(selectedIndex) || selectedIndex<0 || selectedIndex>=state.students.length) selectedIndex=0;
+  const selectedStudent=(state.students&&state.students[selectedIndex])?state.students[selectedIndex]:state.students[0];
+  state.selectedStudentIndex=selectedIndex;
+  const medValue=readOptional('careMedication');
+  const dose=readOptional('careMedicationDose');
+  let medication='Sin medicamento administrado';
+  let medicationInventoryIndex=null;
+  if(medValue && medValue!=='otro'){
+    const parsedMedIndex=parseInt(medValue,10);
+    if(Number.isFinite(parsedMedIndex) && parsedMedIndex>=0 && parsedMedIndex<state.inventory.length){
+      medicationInventoryIndex=parsedMedIndex;
+      medication=state.inventory[parsedMedIndex].name;
+    }
+  }else if(medValue==='otro'){
+    medication='Otro / no registrado en inventario';
+  }
+  const stamp=formatDateTime24();
+  const record={
+    date:stamp.date,
+    time:stamp.time,
+    student:selectedStudent?.fullName || 'Estudiante sin nombre',
+    bodyArea:readOptional('careBodyArea') || 'Sin especificar',
+    eva:readOptional('careEva') || 'Sin especificar',
+    symptoms:readOptional('careSymptoms') || 'Sin especificar',
+    presumptiveDiagnosis:readOptional('carePresumptiveDiagnosis') || 'Sin especificar',
+    actionDone:readOptional('careActionDone') || 'Sin especificar',
+    medication:dose ? medication+' · '+dose : medication,
+    dose,
+    derivation:readOptional('careDerivation') || 'Sin especificar',
+    observations:readOptional('careObservations') || 'Sin observaciones',
+    family:'Pendiente'
+  };
+  if(medicationInventoryIndex!==null && Number.isFinite(medicationInventoryIndex)){
+    registerInventoryUse(medicationInventoryIndex,record.student,'Administrado en atención médica',false);
+  }
+  if(window.novimedCloudReady && window.novimedCloudAddCareRecord){
+    window.novimedCloudAddCareRecord(record).catch(err=>{
+      console.error('Atención a nube:',err);
+      state.careRecords.unshift(record);
+      renderAll();
+      showToast('Registro local','La atención no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
+    });
+  }else{
+    state.careRecords.unshift(record);
+  }
+  state.careSaved=true;
+  state.activities.push([stamp.time,'green','Atención registrada',`${record.student} · ${record.eva} · ${record.bodyArea}`]);
+  closeModal('attentionModal');
+  showSuccess('Atención registrada','La atención médica quedó documentada y la familia fue notificada.');
+  renderAll();
+  showPage('atenciones');
+}
+function confirmFamilyRead(){
+  state.familyRead=true;
+  const latest=(state.careRecords||[])[0];
+  if(latest){
+    latest.family='Confirmada';
+    if(window.novimedCloudReady && latest.id && window.novimedCloudConfirmFamily){
+      window.novimedCloudConfirmFamily(latest.id).catch(err=>console.error('Confirmación a nube:',err));
+    }
+  }
+  state.activities.push(['Ahora','amber','Familia confirmó lectura','Ana Martínez recibió la información']);
+  showSuccess('Lectura confirmada','La confirmación familiar quedó registrada en trazabilidad.');
+  renderAll();
+}
+function showSuccess(t,txt){el('successTitle').textContent=t;el('successText').textContent=txt;openModal('successModal')}
+document.querySelectorAll('#bodyAreaOptions .area-btn').forEach(btn=>btn.onclick=()=>setBodyArea(btn.dataset.area));el('openFicha').onclick=openFichaModal;el('openAttention').onclick=openAttentionModal;el('goDemo').onclick=()=>showPage('roles');el('bell').onclick=()=>{const c=activeAlert();showToast('Nueva alerta médica',`${c.studentName} — ${c.location}. El centro médico fue notificado.`);};/* V30 — Búsqueda real sobre los registros del sistema (antes era un resultado fijo) */
+function normalizeText(v){return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+let searchDebounce=null;
+el('searchInput').addEventListener('input',e=>{
+  clearTimeout(searchDebounce);
+  const q=normalizeText(e.target.value.trim());
+  if(q.length<2) return;
+  searchDebounce=setTimeout(()=>{
+    const studentIdx=state.students.findIndex(s=>normalizeText(s.fullName).includes(q));
+    if(studentIdx>=0){
+      const s=state.students[studentIdx];
+      showToast('Estudiante encontrado',`${s.fullName} · ${conditionSummary(s)}`);
+      return;
+    }
+    const med=state.inventory.find(m=>normalizeText(m.name).includes(q));
+    if(med){showToast('Inventario',`${med.name} · ${med.stock} unidades disponibles`);return;}
+    const care=(state.careRecords||[]).find(r=>normalizeText(r.student).includes(q)||normalizeText(r.symptoms).includes(q));
+    if(care){showToast('Atención registrada',`${care.student} · ${care.date} ${care.time}`);}
+  },220);
+});
+document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('open')});
+/* V30 — Accesibilidad: cerrar modales con Escape y llevar el foco al abrir */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    document.querySelectorAll('.modal.open').forEach(m=>closeModal(m.id));
+  }
+});
+renderAll();
+</script>
+
+
+
+
+<script>
+/* Bridge V8 — Expone la lógica actual para la integración modular con Firebase */
+window.novimedState = state;
+window.novimedRenderAll = renderAll;
+window.novimedShowPage = showPage;
+window.novimedShowSuccess = showSuccess;
+window.novimedRegisterInventoryUse = registerInventoryUse;
+window.novimedCloseModal = closeModal;
+window.novimedSubmitTeacherAlertLocal = submitTeacherAlert;
+window.novimedShowToast = showToast;
+window.novimedSubmitCareLocal = submitCare;
+window.novimedConfirmFamilyReadLocal = confirmFamilyRead;
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import {
+  initializeFirestore,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  runTransaction,
+  writeBatch,
+  increment,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+
+/* ✅ API Key rotada (V30). ✅ Security Rules publicadas (solo usuarios autenticados).
+   ✅ Autenticación anónima implementada (V30.1) — la sincronización solo inicia con sesión válida.
+   ⚠️ PENDIENTE (acción externa):
+   1. Verificar que la clave anterior fue DESHABILITADA en Google Cloud Console → Credentials.
+   2. Restringir esta clave por HTTP referrer al dominio de producción.
+   3. Evolución futura: email/password con roles (médico, docente, familia, directivo). */
+const firebaseConfig = {
+  apiKey: "AIzaSyCnZE08xhYV5KHZfGDoHj1KMRn16hLEe18",
+  authDomain: "novimed-2c5e9.firebaseapp.com",
+  projectId: "novimed-2c5e9",
+  storageBucket: "novimed-2c5e9.firebasestorage.app",
+  messagingSenderId: "750799724381",
+  appId: "1:750799724381:web:638f41cb950a83a617d2b4",
+  measurementId: "G-ZL3PW9N40F"
+};
+
+const app = initializeApp(firebaseConfig);
+/* V30.3 — Safari/iOS y redes institucionales cortan el canal WebChannel de Firestore:
+   la lectura inicial funciona pero los push en vivo nunca llegan.
+   Long polling es el transporte compatible recomendado por Firebase para estos entornos. */
+const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+const caseRef = doc(db, "cases", "active-alert");
+
+window.firebaseApp = app;
+window.db = db;
+window.novimedCaseRef = caseRef;
+
+/* ============================================================
+   V31 — CAPA DE DATOS MULTI-COLECCIÓN (multi-tenant desde el día 1)
+   schools/{SCHOOL_ID}/students | careRecords | inventory | inventoryLog | vaccines
+   - Cada ficha, atención y movimiento es un documento permanente.
+   - Los listeners en vivo mantienen el estado local sincronizado entre dispositivos.
+   - Si la nube no está disponible, la app cae al modo local existente (sin pérdida de UX).
+   ============================================================ */
+const SCHOOL_ID = "eight-demo"; // ← raíz multi-tenant; en SaaS real vendrá de la cuenta institucional
+
+const colRef = (name) => collection(db, "schools", SCHOOL_ID, name);
+const seedRef = doc(db, "schools", SCHOOL_ID, "meta", "seed");
+
+window.novimedCloudReady = false;
+
+function stripUndefined(obj){
+  const out = {};
+  for(const k in obj){ if(obj[k] !== undefined) out[k] = obj[k]; }
+  return out;
+}
+
+async function seedIfNeeded(){
+  const s = window.novimedState;
+  if(!s) return;
+  const won = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(seedRef);
+    if(snap.exists()) return false;
+    tx.set(seedRef, { seededAt: Date.now(), version: 31 });
+    return true;
+  });
+  if(!won) return;
+  const base = Date.now();
+  const batch = writeBatch(db);
+  (s.students||[]).forEach((st,i)=> batch.set(doc(colRef("students")), stripUndefined({...st, createdAt: base + i})));
+  (s.inventory||[]).forEach((it,i)=> batch.set(doc(colRef("inventory")), stripUndefined({...it, createdAt: base + i})));
+  (s.vaccines||[]).forEach((v,i)=> batch.set(doc(colRef("vaccines")), stripUndefined({...v, createdAt: base + i})));
+  (s.careRecords||[]).forEach((r,i)=> batch.set(doc(colRef("careRecords")), stripUndefined({...r, createdAt: base - i})));
+  (s.inventoryHistory||[]).forEach((h,i)=> batch.set(doc(colRef("inventoryLog")), {time:h[0]||"",name:h[1]||"",qty:h[2]||"",student:h[3]||"",context:h[4]||"",createdAt: base - i}));
+  await batch.commit();
+  console.log("Novimed: datos base sembrados en Firestore para", SCHOOL_ID);
+}
+
+function attachCollectionListeners(){
+  const s = window.novimedState;
+  if(!s) return;
+  const bind = (name, order, map, mergeLocal) => {
+    onSnapshot(query(colRef(name), orderBy("createdAt", order)), (qs) => {
+      const arr = [];
+      qs.forEach(d => arr.push(map(d)));
+      const key = name === "inventoryLog" ? "inventoryHistory" : name;
+      if(mergeLocal){
+        /* Preserva registros locales que no llegaron a la nube (sin id) para no perderlos */
+        const pending = (s[key]||[]).filter(x => x && typeof x === "object" && !x.id);
+        s[key] = order === "desc" ? [...pending, ...arr] : [...arr, ...pending];
+      }else{
+        s[key] = arr;
+      }
+      safeRender();
+    }, (error) => {
+      console.error("Listener "+name+":", error);
+      uiNotify("Sincronización parcial", "No se pudo escuchar '"+name+"' ("+(error.code||"error")+").");
+    });
+  };
+  bind("students", "asc", d => ({ id: d.id, ...d.data() }), true);
+  bind("inventory", "asc", d => ({ id: d.id, ...d.data() }), true);
+  bind("vaccines", "asc", d => ({ id: d.id, ...d.data() }), false);
+  bind("careRecords", "desc", d => ({ id: d.id, ...d.data() }), true);
+  bind("inventoryLog", "desc", d => { const x = d.data(); return [x.time||"", x.name||"", x.qty||"", x.student||"", x.context||""]; }, false);
+}
+
+/* API de nube para el script clásico. Todas devuelven una Promise;
+   el script clásico decide el fallback local si fallan. */
+window.novimedCloudAddStudent = (student) => addDoc(colRef("students"), stripUndefined({...student, createdAt: Date.now()}));
+window.novimedCloudAddInventoryItem = (item) => addDoc(colRef("inventory"), stripUndefined({...item, createdAt: Date.now()}));
+window.novimedCloudAddCareRecord = (record) => addDoc(colRef("careRecords"), stripUndefined({...record, createdAt: Date.now()}));
+window.novimedCloudUseInventory = (itemId, logEntry) => Promise.all([
+  updateDoc(doc(colRef("inventory"), itemId), { stock: increment(-1) }),
+  addDoc(colRef("inventoryLog"), {...logEntry, createdAt: Date.now()})
+]);
+window.novimedCloudConfirmFamily = (recordId) => updateDoc(doc(colRef("careRecords"), recordId), { family: "Confirmada" });
+
+function currentTimeLabel(){
+  return new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
+}
+
+function safeRender(){
+  if(typeof window.novimedRenderAll === "function"){
+    window.novimedRenderAll();
+  }
+}
+
+function mapFirestoreToLocalState(data){
+  const s = window.novimedState;
+  if(!s || !data) return;
+
+  const status = data.status || "alert_pending";
+  const studentName = data.studentName || "Sofía Martínez";
+  const location = data.location || "Aula 3B · 2° piso";
+  const symptoms = data.symptoms || "Mareo, náuseas y dolor abdominal durante la clase.";
+  s.currentAlert = {studentName, location, symptoms, allergy:data.allergy || "Maní", alertTimeLabel:data.alertTimeLabel || "Ahora"};
+  const familyRead = data.familyRead === true;
+  const doctorNotified = data.doctorNotified === true;
+  const careSaved = doctorNotified || status === "in_observation" || status === "attended" || status === "family_confirmed";
+
+  s.alertSent = status !== "idle";
+  s.careSaved = careSaved;
+  s.familyRead = familyRead;
+
+  const activities = [];
+
+  if(status !== "idle"){
+    activities.push([
+      data.alertTimeLabel || "Ahora",
+      "red",
+      `Nueva alerta de ${studentName}`,
+      location + " · docente reporta síntomas"
+    ]);
+  }
+
+  if(doctorNotified || careSaved){
+    activities.push([
+      data.attentionTimeLabel || "Ahora",
+      "blue",
+      "Departamento médico notificado",
+      "Andrés Sánchez recibió alerta y consultó la ficha médica"
+    ]);
+    activities.push([
+      data.attentionTimeLabel || "Ahora",
+      "green",
+      "Ficha médica consultada",
+      "Alergia registrada: " + (data.allergy || "Maní")
+    ]);
+  }
+
+  if(careSaved){
+    activities.push([
+      data.attentionTimeLabel || "Ahora",
+      "green",
+      "Atención registrada",
+      data.careNote || "Observación médica guardada y familia notificada"
+    ]);
+    activities.push([
+      data.attentionTimeLabel || "Ahora",
+      "amber",
+      "Familia notificada",
+      familyRead ? "Ana Martínez confirmó lectura" : "Ana Martínez pendiente de lectura"
+    ]);
+  }
+
+  if(familyRead){
+    activities.push([
+      data.familyReadTimeLabel || "Ahora",
+      "amber",
+      "Familia confirmó lectura",
+      "Ana Martínez recibió la información"
+    ]);
+  }
+
+  if(activities.length === 0){
+    activities.push(
+      ["10:24","red",`Nueva alerta de ${studentName}`, location + " · docente reporta síntomas"],
+      ["10:25","blue","Departamento médico notificado","Andrés Sánchez recibió alerta"],
+      ["10:26","green","Ficha médica consultada","Alergia y contactos verificados"],
+      ["10:27","amber","Familia notificada","Ana Martínez pendiente de lectura"]
+    );
+  }
+
+  s.activities = activities;
+}
+
+async function ensureCaseExists(){
+  await setDoc(caseRef, {
+    studentName: "Sofía Martínez",
+    status: "alert_pending",
+    allergy: "Maní",
+    familyRead: false,
+    doctorNotified: false,
+    priority: "high",
+    location: "Aula 3B · 2° piso",
+    symptoms: "Mareo, náuseas y dolor abdominal durante la clase.",
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+window.submitTeacherAlert = async function(){
+  const student = (document.getElementById("reportStudent")?.value || "Estudiante sin nombre").trim();
+  const location = (document.getElementById("reportRoom")?.value || "Ubicación sin registrar").trim();
+  const symptoms = (document.getElementById("reportSymptoms")?.value || "Síntomas sin especificar").trim();
+
+  window.novimedSubmitTeacherAlertLocal?.();
+
+  try{
+    await setDoc(caseRef, {
+      studentName: student,
+      status: "alert_pending",
+      allergy: "Maní",
+      familyRead: false,
+      doctorNotified: false,
+      priority: "high",
+      location,
+      symptoms,
+      alertTimeLabel: currentTimeLabel(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }catch(error){
+    console.error("Error al sincronizar alerta en Firebase. Se mantiene el registro local:", error);
+    uiNotify("Alerta solo local","No se pudo enviar a Firestore ("+(error.code||"error")+"). Otros dispositivos no la verán.");
+  }
+};
+
+window.submitCare = async function(){
+  const careStatus = document.getElementById("careStatus")?.value || "En observación";
+  const eva = document.getElementById("careEva")?.value || "5 · Moderado";
+  const careNote = document.getElementById("careObservations")?.value || document.getElementById("careActionDone")?.value || "Atención médica registrada y familia notificada.";
+  let selectedStudentIndex = parseInt(document.getElementById("careStudent")?.value || window.novimedState?.selectedStudentIndex || 0, 10);
+  if(!Number.isFinite(selectedStudentIndex) || selectedStudentIndex < 0) selectedStudentIndex = 0;
+  const selectedStudent = window.novimedState?.students?.[selectedStudentIndex]?.fullName || "Estudiante sin nombre";
+  const bodyArea = document.getElementById("careBodyArea")?.value || "Sin especificar";
+  const symptoms = document.getElementById("careSymptoms")?.value || "Sin especificar";
+  const presumptiveDiagnosis = document.getElementById("carePresumptiveDiagnosis")?.value || "Sin especificar";
+  const actionDone = document.getElementById("careActionDone")?.value || "Sin especificar";
+
+  window.novimedSubmitCareLocal?.();
+
+  try{
+    await updateDoc(caseRef, {
+      status: "in_observation",
+      doctorNotified: true,
+      familyRead: false,
+      studentName: selectedStudent,
+      careStatus,
+      eva,
+      careNote,
+      bodyArea,
+      symptoms,
+      presumptiveDiagnosis,
+      actionDone,
+      attentionTimeLabel: currentTimeLabel(),
+      updatedAt: serverTimestamp()
+    });
+  }catch(error){
+    console.error("Error al sincronizar atención en Firebase. Se mantiene el registro local:", error);
+  }
+};
+
+window.confirmFamilyRead = async function(){
+  window.novimedConfirmFamilyReadLocal?.();
+
+  try{
+    await updateDoc(caseRef, {
+      familyRead: true,
+      status: "family_confirmed",
+      familyReadTimeLabel: currentTimeLabel(),
+      updatedAt: serverTimestamp()
+    });
+  }catch(error){
+    console.error("Error al sincronizar lectura familiar en Firebase. Se mantiene la confirmación local:", error);
+  }
+};
+
+/* V30.1 — Autenticación anónima: las Security Rules exigen sesión válida.
+   La sincronización en tiempo real solo se inicia tras autenticar.
+   Si la autenticación falla, la app continúa en modo local (sin tiempo real). */
+const auth = getAuth(app);
+window.firebaseAuth = auth;
+
+let syncStarted = false;
+let firstSnapshotNotified = false;
+function uiNotify(title, text){
+  if(typeof window.novimedShowToast === "function"){ window.novimedShowToast(title, text); }
+}
+function startRealtimeSync(){
+  if(syncStarted) return;
+  syncStarted = true;
+  onSnapshot(caseRef, (snapshot) => {
+    if(snapshot.exists()){
+      mapFirestoreToLocalState(snapshot.data());
+      safeRender();
+      if(!firstSnapshotNotified){
+        firstSnapshotNotified = true;
+        uiNotify("Tiempo real activo","Conectado a Firestore. Este dispositivo recibirá alertas en vivo.");
+      }
+    }else{
+      ensureCaseExists().catch(error => console.error("No se pudo crear el caso base:", error));
+    }
+  }, (error) => {
+    console.error("Error de sincronización Firestore:", error);
+    uiNotify("Sin tiempo real","Firestore rechazó la conexión ("+(error.code||"error")+"). La app funciona en modo local.");
+  });
+  console.log("Novimed: sesión autenticada y sincronización en tiempo real activa");
+}
+
+onAuthStateChanged(auth, (user) => {
+  if(user){
+    startRealtimeSync();
+    seedIfNeeded()
+      .catch(error => {
+        console.error("Seed:", error);
+        uiNotify("Aviso de datos","No se pudo verificar la siembra inicial ("+(error.code||"error")+").");
+      })
+      .finally(() => {
+        attachCollectionListeners();
+        window.novimedCloudReady = true;
+      });
+  }
+});
+
+signInAnonymously(auth).catch((error) => {
+  console.error("No se pudo autenticar con Firebase. La app continúa en modo local:", error);
+  uiNotify("Sin conexión Firebase","Autenticación falló ("+(error.code||"error")+"). La app funciona en modo local.");
+});
+
+/* V30.3 — Red de seguridad: Safari suspende pestañas en segundo plano.
+   Al recuperar visibilidad, se relee el caso por si algún push se perdió. */
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible" && auth.currentUser){
+    getDoc(caseRef).then((snapshot) => {
+      if(snapshot.exists()){
+        mapFirestoreToLocalState(snapshot.data());
+        safeRender();
+      }
+    }).catch(() => {/* sin conexión momentánea: el listener seguirá intentando */});
+  }
+});
+</script>
+
+<script>
+/* FIX V12 — Menú móvil off-canvas (solo UI, no altera lógica de negocio) */
+(function(){
+  var sidebar = document.querySelector('.sidebar');
+  var menuBtn = document.getElementById('mobileMenuBtn');
+  var overlay = document.getElementById('mobileOverlay');
+  if(!sidebar || !menuBtn || !overlay) return;
+
+  function openDrawer(){
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    menuBtn.setAttribute('aria-expanded','true');
+  }
+  function closeDrawer(){
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+    menuBtn.setAttribute('aria-expanded','false');
+  }
+
+  menuBtn.addEventListener('click', function(){
+    if(sidebar.classList.contains('open')){ closeDrawer(); } else { openDrawer(); }
+  });
+  overlay.addEventListener('click', closeDrawer);
+  sidebar.querySelectorAll('.nav button').forEach(function(btn){
+    btn.addEventListener('click', closeDrawer);
+  });
+  window.addEventListener('resize', function(){
+    if(window.innerWidth > 720){ closeDrawer(); }
+  });
+})();
+</script>
+
+</body>
+</html>
