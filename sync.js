@@ -323,6 +323,7 @@ window.submitCare = async function(){
     if(currentAlertDocId && (!linkedAlert || linkedAlert.status==="pending")){
       updateDoc(doc(colRef("alerts"), currentAlertDocId), {
         status: "attended",
+        attendedAt: Date.now(),
         attendedTimeLabel: currentTimeLabel()
       }).catch(err => console.error("Alerta→atendida:", err));
     }
@@ -345,6 +346,7 @@ window.confirmFamilyRead = async function(){
     if(currentAlertDocId && (!linkedAlertFR || linkedAlertFR.status!=="family_confirmed")){
       updateDoc(doc(colRef("alerts"), currentAlertDocId), {
         status: "family_confirmed",
+        familyConfirmedAt: Date.now(),
         familyReadTimeLabel: currentTimeLabel()
       }).catch(err => console.error("Alerta→cerrada:", err));
     }

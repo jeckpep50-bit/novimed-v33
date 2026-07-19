@@ -419,7 +419,44 @@ function careCountToday(){
   const today=formatDateTime24().date;
   return (state.careRecords||[]).filter(r=>r && r.date===today).length;
 }
-function renderAll(){renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else{el('kpiAlerts').textContent=state.careSaved?'2':'3';}el('kpiCare').textContent=careCountToday();el('kpiFamily').textContent=state.familyRead?'96%':'94%';el('reportRead').textContent=state.familyRead?'96%':'94%';el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');persistState()}
+function formatDuration(ms){const m=Math.floor(ms/60000);const s=Math.round((ms%60000)/1000);return m+'m '+String(s).padStart(2,'0')+'s'}
+function familyReadPct(){
+  if(!Array.isArray(state.alerts))return null;
+  const closed=state.alerts.filter(a=>a&&a.status==='family_confirmed').length;
+  const attended=state.alerts.filter(a=>a&&a.status==='attended').length;
+  const done=closed+attended;
+  return done?Math.round(closed/done*100):null;
+}
+function renderReports(){
+  if(!el('reportClosed'))return;
+  const alerts=Array.isArray(state.alerts)?state.alerts:null;
+  if(alerts){
+    const closed=alerts.filter(a=>a&&a.status==='family_confirmed').length;
+    const total=alerts.length;
+    el('reportClosed').textContent=String(closed);
+    el('reportClosedSub').textContent=total?Math.round(closed/total*100)+'% del total':'sin alertas aún';
+    const times=alerts.filter(a=>a&&Number.isFinite(a.attendedAt)&&Number.isFinite(a.createdAt)&&a.attendedAt>a.createdAt).map(a=>a.attendedAt-a.createdAt);
+    if(times.length){
+      const avg=times.reduce((x,y)=>x+y,0)/times.length;
+      el('reportAvg').textContent=formatDuration(avg);
+      el('reportAvgSub').textContent=times.length===1?'1 caso medido':times.length+' casos medidos';
+    }else{
+      el('reportAvg').textContent='—';
+      el('reportAvgSub').textContent='aún sin mediciones';
+    }
+    const cnt=p=>alerts.filter(a=>a&&(a.priority||'Alta')===p).length;
+    el('reportPrioLine').innerHTML=`<span class="chip red">Alta ${cnt('Alta')}</span><span class="chip amber">Media ${cnt('Media')}</span><span class="chip green">Baja ${cnt('Baja')}</span>`;
+  }
+  const pct=familyReadPct();
+  el('reportRead').textContent=pct===null?(state.familyRead?'96%':'94%'):pct+'%';
+  const evaluated=(state.riskProfiles||[]).map(p=>calculateRisk(p));
+  el('reportRisk').textContent=String(evaluated.filter(r=>r&&r.cls==='red').length);
+  const freq={};
+  (state.careRecords||[]).forEach(r=>{const k=((r&&r.symptoms)||'').trim();if(k&&k!=='Sin especificar')freq[k]=(freq[k]||0)+1});
+  const top=Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
+  el('reportTopMotivos').textContent=top.length?top.join(' · '):'Aún sin atenciones registradas.';
+}
+function renderAll(){renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else{el('kpiAlerts').textContent=state.careSaved?'2':'3';}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();el('kpiFamily').textContent=_frp===null?(state.familyRead?'96%':'94%'):_frp+'%';renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
 function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){openModal('reportModal')}function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
