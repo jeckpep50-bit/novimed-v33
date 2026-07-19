@@ -86,7 +86,6 @@ async function seedIfNeeded(){
   (s.careRecords||[]).forEach((r,i)=> batch.set(doc(colRef("careRecords")), stripUndefined({...r, createdAt: base - i})));
   (s.inventoryHistory||[]).forEach((h,i)=> batch.set(doc(colRef("inventoryLog")), {time:h[0]||"",name:h[1]||"",qty:h[2]||"",student:h[3]||"",context:h[4]||"",createdAt: base - i}));
   await batch.commit();
-  console.log("Novimed: datos base sembrados en Firestore para", SCHOOL_ID);
 }
 
 const seedAlertsRef = doc(db, "schools", SCHOOL_ID, "meta", "seed-alerts");
@@ -384,7 +383,6 @@ function startRealtimeSync(){
     console.error("Error de sincronización Firestore:", error);
     uiNotify("Sin tiempo real","Firestore rechazó la conexión ("+(error.code||"error")+"). La app funciona en modo local.");
   });
-  console.log("Novimed: sesión autenticada y sincronización en tiempo real activa");
 }
 
 onAuthStateChanged(auth, (user) => {

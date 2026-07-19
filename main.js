@@ -1,7 +1,6 @@
-/* Novimed V32 — Punto de entrada.
-   El orden importa: core define el estado y los handlers;
-   sync (Firebase) sobreescribe los handlers que sincronizan a la nube;
-   drawer inicializa la navegación móvil. */
+/* Novimed V35 — Punto de entrada (estructura plana, compatible con subidas desde iPad).
+   El orden importa: core define estado y handlers; sync (Firebase) sobreescribe
+   los que sincronizan a la nube; drawer inicializa el menú móvil. */
 import './main.css';
 import './core.js';
 import './sync.js';

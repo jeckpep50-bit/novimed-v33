@@ -260,8 +260,6 @@ function renderRisk(){
   el('riskHigh').textContent=high;
   el('riskMedium').textContent=medium;
   el('riskLow').textContent=low;
-  const pill=el('riskPill');
-  if(pill) pill.textContent=high;
   table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+evaluated.map(({profile,risk})=>{
     return `<tr><td>${escapeHtml(profile.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(profile.course)}</span></td><td>${escapeHtml(profile.condition)}</td><td><span class="chip ${risk.cls}">${risk.level}</span></td><td><div class="risk-score"><span>${risk.score}/100</span><div class="risk-meter"><div class="risk-fill ${risk.cls}" style="width:${risk.score}%"></div></div></div></td><td>${escapeHtml(risk.factors.join(', ') || 'sin factores activos')}</td><td>${escapeHtml(profile.action)}</td></tr>`;
   }).join('');
@@ -284,8 +282,6 @@ function renderVaccines(){
   el('vacOk').textContent=ok;
   el('vacPending').textContent=pending;
   el('vacReview').textContent=review;
-  const pill=el('vaccinePill');
-  if(pill) pill.textContent=pending + review;
   table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Edad</th><th scope="col">Referencia MSP</th><th scope="col">Estado</th><th scope="col">Próxima acción</th></tr>'+state.vaccines.map(v=>{
     const cls=v.status==='Al día'?'green':(v.status.includes('Pendiente')?'red':'amber');
     return `<tr><td>${escapeHtml(v.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course)}</span></td><td>${escapeHtml(v.age)}</td><td>${escapeHtml(v.reference)}</td><td><span class="chip ${cls}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.next)}</td></tr>`;
@@ -323,8 +319,6 @@ function renderInventory(){
   el('invLow').textContent=low;
   el('invExpire').textContent=expiring;
   el('invUses').textContent=state.inventoryHistory.length;
-  const pill=el('inventoryPill');
-  if(pill) pill.textContent=low;
   table.innerHTML='<tr><th scope="col">Medicamento / insumo</th><th scope="col">Categoría</th><th scope="col">Stock disponible</th><th scope="col">Stock mínimo</th><th scope="col">Caducidad</th><th scope="col">Reposición</th><th scope="col">Acción</th></tr>'+state.inventory.map((item,index)=>{
     const st=inventoryStatus(item);
     const reorder=item.stock<=item.min?'Solicitar reposición':'Stock suficiente';

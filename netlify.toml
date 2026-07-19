@@ -1,3 +1,17 @@
 [build]
   command = "npm run build"
   publish = "dist"
+
+# App de una sola página: cualquier ruta sirve el index (evita 404 en recargas)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabeceras de seguridad de riesgo cero (no afectan Firebase ni fuentes)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
