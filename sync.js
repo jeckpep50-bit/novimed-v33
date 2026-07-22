@@ -12,6 +12,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   serverTimestamp
 } from "firebase/firestore";
@@ -145,15 +146,22 @@ window.novimedCloudUseInventory = (itemId, logEntry) => Promise.all([
   addDoc(colRef("inventoryLog"), {...logEntry, createdAt: Date.now()})
 ]);
 window.novimedCloudConfirmFamily = (recordId) => updateDoc(doc(colRef("careRecords"), recordId), { family: "Confirmada" });
+window.novimedCloudUpdateStudent = (id, data) => updateDoc(doc(colRef("students"), id), data);
+window.novimedCloudDeleteStudent = (id) => deleteDoc(doc(colRef("students"), id));
+window.novimedSchoolLabel = SCHOOL_ID;
 
 function currentTimeLabel(){
   return new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
 }
 
+let renderQueued=false;
 function safeRender(){
-  if(typeof window.novimedRenderAll === "function"){
-    window.novimedRenderAll();
-  }
+  if(renderQueued) return;
+  renderQueued=true;
+  setTimeout(()=>{
+    renderQueued=false;
+    if(typeof window.novimedRenderAll === "function"){ window.novimedRenderAll(); }
+  },0);
 }
 
 let currentAlertDocId = null;
@@ -357,6 +365,7 @@ window.confirmFamilyRead = async function(){
 /* V30.1 — Autenticación anónima: las Security Rules exigen sesión válida.
    La sincronización en tiempo real solo se inicia tras autenticar.
    Si la autenticación falla, la app continúa en modo local (sin tiempo real). */
+window.novimedSyncStatus = "Conectando…";
 const auth = getAuth(app);
 window.firebaseAuth = auth;
 
@@ -375,6 +384,7 @@ function startRealtimeSync(){
       if(!firstSnapshotNotified){
         firstSnapshotNotified = true;
         uiNotify("Tiempo real activo","Conectado a Firestore. Este dispositivo recibirá alertas en vivo.");
+        window.novimedSyncStatus = "Tiempo real activo";
       }
     }else{
       ensureCaseExists().catch(error => console.error("No se pudo crear el caso base:", error));
@@ -382,6 +392,7 @@ function startRealtimeSync(){
   }, (error) => {
     console.error("Error de sincronización Firestore:", error);
     uiNotify("Sin tiempo real","Firestore rechazó la conexión ("+(error.code||"error")+"). La app funciona en modo local.");
+    window.novimedSyncStatus = "Sin tiempo real ("+(error.code||"error")+")";
   });
 }
 
@@ -405,6 +416,7 @@ onAuthStateChanged(auth, (user) => {
 signInAnonymously(auth).catch((error) => {
   console.error("No se pudo autenticar con Firebase. La app continúa en modo local:", error);
   uiNotify("Sin conexión Firebase","Autenticación falló ("+(error.code||"error")+"). La app funciona en modo local.");
+  window.novimedSyncStatus = "Modo local (sin autenticación)";
 });
 
 /* V30.3 — Red de seguridad: Safari suspende pestañas en segundo plano.
