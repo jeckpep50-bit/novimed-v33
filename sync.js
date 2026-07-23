@@ -63,6 +63,140 @@ const seedRef = doc(db, "schools", SCHOOL_ID, "meta", "seed");
 
 window.novimedCloudReady = false;
 
+/* ============================================================
+   V37 — COLA DE REINTENTOS OFFLINE (P5)
+   Escrituras fallidas se encolan en localStorage y se reintentan
+   con backoff (25s→60s→180s→300s, máx 6 intentos). La deduplicación
+   usa clientOpId: el doc lleva el id de operación, y el merge de
+   listeners descarta la copia local pendiente cuando el doc llega.
+   Excluido por diseño: el caso activo y la alerta docente (estado
+   de coordinación efímero; reproducirlo tarde induciría a error).
+   ============================================================ */
+const QUEUE_KEY = "novimed_pending_ops_v1";
+const QUEUE_MAX_ATTEMPTS = 6;
+const QUEUE_BACKOFF_MS = [25000, 60000, 180000, 300000];
+
+function makeOpId(){ return "op_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9); }
+window.novimedNewOpId = makeOpId;
+
+function loadQueue(){
+  try{
+    const raw = localStorage.getItem(QUEUE_KEY);
+    const q = raw ? JSON.parse(raw) : [];
+    return Array.isArray(q) ? q.filter(o => o && o.type && o.opId) : [];
+  }catch(e){ return []; }
+}
+function saveQueue(q){
+  try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){/* sin cuota: la cola vive en memoria */}
+}
+let pendingOps = loadQueue();
+let abandonNotified = false;
+
+function enqueueOp(type, payload, opId){
+  if(pendingOps.some(o => o.opId === opId)) return;
+  pendingOps.push({ type, payload, opId, attempts: 1, nextAt: Date.now() + QUEUE_BACKOFF_MS[0], status: "pending" });
+  saveQueue(pendingOps);
+}
+window.novimedPendingOpsCount = () => pendingOps.filter(o => o.status !== "done").length;
+
+const queueExecutors = {
+  addStudent:      (p) => addDoc(colRef("students"), p),
+  addInventoryItem:(p) => addDoc(colRef("inventory"), p),
+  addCareRecord:   (p) => addDoc(colRef("careRecords"), p),
+  invUse:          (p) => Promise.all([
+                      updateDoc(doc(colRef("inventory"), p.itemId), { stock: increment(-1) }),
+                      addDoc(colRef("inventoryLog"), p.logEntry)
+                    ]),
+  updateStudent:   (p) => updateDoc(doc(colRef("students"), p.id), p.data),
+  deleteStudent:   (p) => deleteDoc(doc(colRef("students"), p.id)),
+  confirmFamily:   (p) => updateDoc(doc(colRef("careRecords"), p.recordId), { family: "Confirmada" })
+};
+
+function alreadyConverged(op){
+  const st = window.novimedState;
+  if(!st) return false;
+  const cid = op.payload && op.payload.clientOpId;
+  if(cid){
+    const coll = op.type === "addStudent" ? st.students
+               : op.type === "addInventoryItem" ? st.inventory
+               : op.type === "addCareRecord" ? st.careRecords : null;
+    if(coll && coll.some(x => x && x.id && x.clientOpId === cid)) return true;
+  }
+  if(op.type === "confirmFamily"){
+    const r = (st.careRecords||[]).find(x => x && x.id === op.payload.recordId);
+    if(r && r.family === "Confirmada") return true;
+  }
+  return false;
+}
+function isTerminalConvergence(err){
+  /* Documento ya inexistente: el sistema convergió (p. ej. reintento de
+     eliminación cuando otro dispositivo ya la aplicó). */
+  return err && err.code === "not-found";
+}
+function stripLocalPendingByOpId(opId){
+  const st = window.novimedState;
+  if(!st) return;
+  ["students","inventory","careRecords"].forEach(k => {
+    if(Array.isArray(st[k])) st[k] = st[k].filter(x => !(x && x._pendingOpId === opId));
+  });
+}
+
+let queueRunning = false;
+async function processQueue(trigger, force){
+  if(queueRunning) return;
+  /* Barrido de convergencia: no requiere red ni sesión. Si la escritura
+     original colgada terminó aplicándose (doc llegó con el mismo
+     clientOpId), la operación se cierra sin duplicar. */
+  let converged = false;
+  pendingOps.forEach(op => {
+    if(op.status === "pending" && alreadyConverged(op)){
+      op.status = "done"; stripLocalPendingByOpId(op.opId); converged = true;
+    }
+  });
+  if(converged){
+    pendingOps = pendingOps.filter(o => o.status !== "done");
+    saveQueue(pendingOps); safeRender();
+  }
+  /* Reintentos de red: automáticos solo con sesión; el forzado manual
+     lo intenta igualmente y reporta el fallo con honestidad. */
+  if(!auth.currentUser && !force) return;
+  const now = Date.now();
+  const due = pendingOps.filter(o => o.status === "pending" && (force || o.nextAt <= now));
+  if(!due.length) return;
+  queueRunning = true;
+  for(const op of due){
+    const exec = queueExecutors[op.type];
+    if(!exec){ op.status = "done"; continue; }
+    try{
+      await withTimeout(exec(op.payload));
+      op.status = "done";
+      stripLocalPendingByOpId(op.opId);
+      uiNotify("Sincronizado", "Un cambio pendiente se subió a la nube correctamente.");
+    }catch(err){
+      if(isTerminalConvergence(err)){ op.status = "done"; continue; }
+      op.attempts += 1;
+      if(op.attempts > QUEUE_MAX_ATTEMPTS){
+        op.status = "abandoned";
+        if(!abandonNotified){
+          abandonNotified = true;
+          uiNotify("Cambios sin sincronizar", "Algunos cambios no pudieron subirse tras varios intentos. Siguen en este dispositivo (panel Sistema).");
+        }
+      }else{
+        op.nextAt = Date.now() + QUEUE_BACKOFF_MS[Math.min(op.attempts - 1, QUEUE_BACKOFF_MS.length - 1)];
+      }
+    }
+  }
+  pendingOps = pendingOps.filter(o => o.status !== "done");
+  saveQueue(pendingOps);
+  queueRunning = false;
+  safeRender();
+}
+window.novimedProcessQueueNow = (force) => processQueue("manual", force === true);
+window.novimedQueueSnapshot = () => pendingOps.map(o => ({ type: o.type, attempts: o.attempts, status: o.status }));
+setInterval(() => processQueue("interval"), 25000);
+window.addEventListener("online", () => processQueue("online"));
+
+
 function stripUndefined(obj){
   const out = {};
   for(const k in obj){ if(obj[k] !== undefined) out[k] = obj[k]; }
@@ -113,11 +247,18 @@ function attachCollectionListeners(){
   const bind = (name, order, map, mergeLocal) => {
     onSnapshot(query(colRef(name), orderBy("createdAt", order)), (qs) => {
       const arr = [];
-      qs.forEach(d => arr.push(map(d)));
+      qs.forEach(d => {
+        /* V37: un documento malformado jamás debe tumbar el render */
+        try{
+          const item = map(d);
+          if(item !== null && item !== undefined) arr.push(item);
+        }catch(e){ console.error("Doc inválido en '"+name+"' ("+d.id+"):", e); }
+      });
       const key = name === "inventoryLog" ? "inventoryHistory" : name;
       if(mergeLocal){
-        /* Preserva registros locales que no llegaron a la nube (sin id) para no perderlos */
-        const pending = (s[key]||[]).filter(x => x && typeof x === "object" && !x.id);
+        /* Conserva copias locales sin id, salvo que su operación ya llegó (clientOpId) */
+        const arrived = new Set(arr.map(x => x && x.clientOpId).filter(Boolean));
+        const pending = (s[key]||[]).filter(x => x && typeof x === "object" && !x.id && !(x._pendingOpId && arrived.has(x._pendingOpId)));
         s[key] = order === "desc" ? [...pending, ...arr] : [...arr, ...pending];
       }else{
         s[key] = arr;
@@ -128,26 +269,50 @@ function attachCollectionListeners(){
       uiNotify("Sincronización parcial", "No se pudo escuchar '"+name+"' ("+(error.code||"error")+").");
     });
   };
-  bind("students", "asc", d => ({ id: d.id, ...d.data() }), true);
-  bind("inventory", "asc", d => ({ id: d.id, ...d.data() }), true);
-  bind("vaccines", "asc", d => ({ id: d.id, ...d.data() }), false);
-  bind("careRecords", "desc", d => ({ id: d.id, ...d.data() }), true);
+  const asObj = d => { const x = d.data(); return (x && typeof x === "object") ? { id: d.id, ...x } : null; };
+  bind("students", "asc", d => { const o = asObj(d); if(o) o.fullName = String(o.fullName || "Estudiante sin nombre"); return o; }, true);
+  bind("inventory", "asc", d => { const o = asObj(d); if(o){ o.name = String(o.name || "Ítem"); o.stock = Number.isFinite(Number(o.stock)) ? Number(o.stock) : 0; } return o; }, true);
+  bind("vaccines", "asc", asObj, false);
+  bind("careRecords", "desc", asObj, true);
   bind("inventoryLog", "desc", d => { const x = d.data(); return [x.time||"", x.name||"", x.qty||"", x.student||"", x.context||""]; }, false);
   bind("alerts", "desc", d => ({ id: d.id, ...d.data() }), false);
 }
 
 /* API de nube para el script clásico. Todas devuelven una Promise;
    el script clásico decide el fallback local si fallan. */
-window.novimedCloudAddStudent = (student) => addDoc(colRef("students"), stripUndefined({...student, createdAt: Date.now()}));
-window.novimedCloudAddInventoryItem = (item) => addDoc(colRef("inventory"), stripUndefined({...item, createdAt: Date.now()}));
-window.novimedCloudAddCareRecord = (record) => addDoc(colRef("careRecords"), stripUndefined({...record, createdAt: Date.now()}));
-window.novimedCloudUseInventory = (itemId, logEntry) => Promise.all([
-  updateDoc(doc(colRef("inventory"), itemId), { stock: increment(-1) }),
-  addDoc(colRef("inventoryLog"), {...logEntry, createdAt: Date.now()})
-]);
-window.novimedCloudConfirmFamily = (recordId) => updateDoc(doc(colRef("careRecords"), recordId), { family: "Confirmada" });
-window.novimedCloudUpdateStudent = (id, data) => updateDoc(doc(colRef("students"), id), data);
-window.novimedCloudDeleteStudent = (id) => deleteDoc(doc(colRef("students"), id));
+function opTimeoutMs(){
+  const v = Number(window.novimedCloudTimeoutMs);
+  return Number.isFinite(v) && v > 0 ? v : 8000;
+}
+function withTimeout(promise){
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const e = new Error("timeout"); e.code = "op-timeout"; reject(e);
+    }, opTimeoutMs());
+    promise.then(v => { clearTimeout(timer); resolve(v); },
+                 e => { clearTimeout(timer); reject(e); });
+  });
+}
+function cloudOp(type, payload, opId){
+  return withTimeout(queueExecutors[type](payload)).catch(err => {
+    enqueueOp(type, payload, opId || makeOpId());
+    throw err;
+  });
+}
+window.novimedCloudAddStudent = (student, opId) =>
+  cloudOp("addStudent", stripUndefined({...student, clientOpId: opId, createdAt: Date.now()}), opId);
+window.novimedCloudAddInventoryItem = (item, opId) =>
+  cloudOp("addInventoryItem", stripUndefined({...item, clientOpId: opId, createdAt: Date.now()}), opId);
+window.novimedCloudAddCareRecord = (record, opId) =>
+  cloudOp("addCareRecord", stripUndefined({...record, clientOpId: opId, createdAt: Date.now()}), opId);
+window.novimedCloudUseInventory = (itemId, logEntry, opId) =>
+  cloudOp("invUse", { itemId, logEntry: {...logEntry, createdAt: Date.now()} }, opId);
+window.novimedCloudConfirmFamily = (recordId, opId) =>
+  cloudOp("confirmFamily", { recordId }, opId);
+window.novimedCloudUpdateStudent = (id, data, opId) =>
+  cloudOp("updateStudent", { id, data }, opId);
+window.novimedCloudDeleteStudent = (id, opId) =>
+  cloudOp("deleteStudent", { id }, opId);
 window.novimedSchoolLabel = SCHOOL_ID;
 
 function currentTimeLabel(){

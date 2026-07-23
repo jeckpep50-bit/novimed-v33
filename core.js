@@ -49,6 +49,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
+const NOVIMED_VERSION='V37';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -86,7 +87,10 @@ function exportStudentsCSV(){
 
 /* V30 — Persistencia local: los registros creados en sesión sobreviven a recargas.
    Solo persiste colecciones de datos; el caso activo sigue sincronizado vía Firestore. */
-const NOVIMED_STORAGE_KEY='novimed_local_state_v1';
+const NOVIMED_STORAGE_KEY='novimed_local_state_v2';
+const NOVIMED_LEGACY_KEY='novimed_local_state_v1';
+const NOVIMED_SCHEMA=2;
+const PERSISTED_KEYS=['students','inventory','inventoryHistory','careRecords','vaccines','riskProfiles'];
 let persistTimer=null;
 function persistState(){
   clearTimeout(persistTimer);
@@ -94,26 +98,43 @@ function persistState(){
 }
 function persistStateNow(){
   try{
-    localStorage.setItem(NOVIMED_STORAGE_KEY,JSON.stringify({
-      students:state.students,
-      inventory:state.inventory,
-      inventoryHistory:state.inventoryHistory,
-      careRecords:state.careRecords,
-      vaccines:state.vaccines,
-      riskProfiles:state.riskProfiles
-    }));
-  }catch(e){/* almacenamiento no disponible: la app sigue funcionando en memoria */}
+    const data={};
+    PERSISTED_KEYS.forEach(k=>{data[k]=state[k];});
+    localStorage.setItem(NOVIMED_STORAGE_KEY,JSON.stringify({schema:NOVIMED_SCHEMA,savedAt:Date.now(),data}));
+  }catch(e){
+    /* Cuota llena u otro fallo: liberar el legado y continuar en memoria */
+    try{localStorage.removeItem(NOVIMED_LEGACY_KEY);}catch(_){/* noop */}
+  }
+}
+function applyRestoredData(data){
+  if(!data||typeof data!=='object')return;
+  PERSISTED_KEYS.forEach(key=>{
+    if(Array.isArray(data[key])&&data[key].length)state[key]=data[key];
+  });
 }
 function restoreState(){
   try{
     const raw=localStorage.getItem(NOVIMED_STORAGE_KEY);
-    if(!raw) return;
-    const saved=JSON.parse(raw);
-    if(!saved || typeof saved!=='object') return;
-    ['students','inventory','inventoryHistory','careRecords','vaccines','riskProfiles'].forEach(key=>{
-      if(Array.isArray(saved[key]) && saved[key].length) state[key]=saved[key];
-    });
-  }catch(e){/* datos corruptos: se ignoran y se usa el estado base */}
+    if(raw){
+      const env=JSON.parse(raw);
+      if(env&&env.schema===NOVIMED_SCHEMA&&env.data&&typeof env.data==='object'){
+        applyRestoredData(env.data);
+        return;
+      }
+      /* Esquema desconocido o envoltura corrupta: descartar de forma segura */
+      localStorage.removeItem(NOVIMED_STORAGE_KEY);
+    }
+    /* Migración única desde el formato v1 (sin envoltura) */
+    const legacy=localStorage.getItem(NOVIMED_LEGACY_KEY);
+    if(legacy){
+      const oldData=JSON.parse(legacy);
+      applyRestoredData(oldData);
+      localStorage.removeItem(NOVIMED_LEGACY_KEY);
+      persistStateNow();
+    }
+  }catch(e){
+    try{localStorage.removeItem(NOVIMED_STORAGE_KEY);localStorage.removeItem(NOVIMED_LEGACY_KEY);}catch(_){/* noop */}
+  }
 }
 restoreState();
 function showToast(t,txt){el('toastTitle').textContent=t;el('toastText').textContent=txt;el('toast').classList.add('show');setTimeout(()=>el('toast').classList.remove('show'),2800)}
@@ -225,7 +246,12 @@ function openStudentModal(){
   ].forEach(id=>{const node=el(id); if(node) node.value='';});
   openModal('studentModal');
 }
-function readOptional(id){const node=el(id);return node ? node.value.trim() : ''}
+function readOptional(id){
+  const node=el(id);
+  if(!node)return '';
+  /* V37: saneo central — recorta longitud y elimina caracteres de control */
+  return (node.value||'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').trim().slice(0,500);
+}
 function saveStudentMedicalRecord(){
   const fullName=readOptional('newFullName') || 'Estudiante sin nombre';
   const birthDate=readOptional('newBirthDate');
@@ -273,9 +299,10 @@ function saveStudentMedicalRecord(){
     return;
   }
   if(window.novimedCloudReady && window.novimedCloudAddStudent){
-    window.novimedCloudAddStudent(student).catch(err=>{
+    const opId=window.novimedNewOpId?window.novimedNewOpId():null;
+    window.novimedCloudAddStudent(student,opId).catch(err=>{
       console.error('Ficha a nube:',err);
-      state.students.push(student);
+      state.students.push({...student,_pendingOpId:opId});
       renderAll();
       showToast('Guardado local','La ficha no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
     });
@@ -459,9 +486,10 @@ function saveMedicineToInventory(){
     status:'Disponible'
   };
   if(window.novimedCloudReady && window.novimedCloudAddInventoryItem){
-    window.novimedCloudAddInventoryItem(item).catch(err=>{
+    const opId=window.novimedNewOpId?window.novimedNewOpId():null;
+    window.novimedCloudAddInventoryItem(item,opId).catch(err=>{
       console.error('Medicamento a nube:',err);
-      state.inventory.push(item);
+      state.inventory.push({...item,_pendingOpId:opId});
       renderAll();
       showToast('Guardado local','El medicamento no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
     });
@@ -548,11 +576,14 @@ function renderReports(){
 }
 function renderSystemInfo(){
   const st=el('configSyncStatus');if(st)st.textContent=window.novimedSyncStatus||'—';
-  const v=el('configVersion');if(v)v.textContent='V36';
+  const v=el('configVersion');if(v)v.textContent=NOVIMED_VERSION;
   const sc=el('configSchool');if(sc)sc.textContent=window.novimedSchoolLabel||'—';
+  const pend=window.novimedPendingOpsCount?window.novimedPendingOpsCount():0;
+  const pn=el('configPending');if(pn)pn.textContent=pend>0?(pend+' operación(es) pendiente(s) de sincronizar'):'Todo sincronizado';
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
-function renderAll(){renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else{el('kpiAlerts').textContent=state.careSaved?'2':'3';}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();el('kpiFamily').textContent=_frp===null?(state.familyRead?'96%':'94%'):_frp+'%';renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();persistState()}
+function renderAll(){
+  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else{el('kpiAlerts').textContent=state.careSaved?'2':'3';}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();el('kpiFamily').textContent=_frp===null?(state.familyRead?'96%':'94%'):_frp+'%';renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
 function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){openModal('reportModal')}function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
@@ -595,9 +626,10 @@ function submitCare(){
     registerInventoryUse(medicationInventoryIndex,record.student,'Administrado en atención médica',false);
   }
   if(window.novimedCloudReady && window.novimedCloudAddCareRecord){
-    window.novimedCloudAddCareRecord(record).catch(err=>{
+    const opId=window.novimedNewOpId?window.novimedNewOpId():null;
+    window.novimedCloudAddCareRecord(record,opId).catch(err=>{
       console.error('Atención a nube:',err);
-      state.careRecords.unshift(record);
+      state.careRecords.unshift({...record,_pendingOpId:opId});
       renderAll();
       showToast('Registro local','La atención no llegó a la nube ('+(err.code||'error')+'). Quedó en este dispositivo.');
     });
