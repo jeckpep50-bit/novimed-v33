@@ -11,7 +11,7 @@
 <meta property="og:title" content="Novimed — Centro de bienestar institucional" />
 <meta property="og:description" content="Gestión médica escolar con alertas, trazabilidad, familias conectadas y reportes institucionales." />
 <meta property="og:type" content="website" />
-<title>Novimed V37 — Centro de bienestar institucional</title>
+<title>Novimed V38.2 — Centro de bienestar institucional</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -23,11 +23,11 @@
   <div class="mobile-overlay" id="mobileOverlay"></div>
   <aside class="sidebar">
     <div class="brand"><div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7.5c0 5.7-8 12-8 12s-8-6.3-8-12A4.5 4.5 0 0 1 12 4a4.5 4.5 0 0 1 8 3.5Z"/><path d="m8.5 11 2.2 2.2 5-5"/></svg></div><div><h1>Novimed</h1><span>Protección Inteligente</span></div></div>
-    <div class="tag"><strong>Centro médico escolar</strong><p>Alertas, atenciones, familias y reportes en un solo flujo.</p><div class="mini-kpis"><span>3 alertas</span><span>27 atenciones</span><span>94% lectura</span><span>2m 34s</span></div></div>
+    <div class="tag"><strong>Centro médico escolar</strong><p>Alertas, atenciones, familias y reportes en un solo flujo.</p><div class="mini-kpis"><span id="chipAlertas">3 alertas</span><span id="chipAtenciones">27 atenciones</span><span id="chipLectura">94% lectura</span><span id="chipTiempo">2m 34s</span></div></div>
     <nav class="nav" id="nav">
       <div class="nav-group-label"><span>Operación diaria</span></div>
       <button type="button" class="active" data-page="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="nav-label">Inicio</span></button>
-      <button type="button" data-page="alertas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nav-label">Centro de alertas</span><span class="pill">3</span></button>
+      <button type="button" data-page="alertas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nav-label">Centro de alertas</span><span class="pill" id="navAlertPill">3</span></button>
       <div class="nav-group-label"><span>Gestión estudiantil</span></div>
       <button type="button" data-page="estudiantes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11l2 2 4-4"/></svg><span class="nav-label">Estudiantes</span></button>
       <div class="nav-group-label"><span>Recursos y comunicación</span></div>
@@ -40,7 +40,7 @@
     <div class="user"><div class="user-row"><div class="avatar" id="sidebarAvatar">MG</div><div><b id="sidebarName">Andrés Sánchez</b><small id="sidebarRole">Departamento médico</small></div></div><div class="online">En línea</div></div>
   </aside>
   <main class="main" id="mainContent" tabindex="-1">
-    <header class="topbar"><button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú" aria-expanded="false" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button><div class="title"><h2 id="pageTitle">Centro de bienestar institucional</h2><p id="pageSub">Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.</p></div><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="searchInput" aria-label="Buscar estudiante, alerta o atención" placeholder="Buscar estudiante, alerta o atención" /></div><button class="bell" id="bell" type="button" aria-label="Ver notificaciones médicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>3</span></button></header>
+    <header class="topbar"><button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú" aria-expanded="false" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button><div class="title"><h2 id="pageTitle">Centro de bienestar institucional</h2><p id="pageSub">Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.</p></div><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="searchInput" aria-label="Buscar estudiante, alerta o atención" placeholder="Buscar estudiante, alerta o atención" /></div><button class="bell" id="bell" type="button" aria-label="Ver notificaciones médicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span id="bellCount">3</span></button></header>
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-icon">!</div><div><b id="toastTitle">Nueva alerta médica</b><p id="toastText">Sofía Martínez — Aula 3B. El centro médico fue notificado.</p></div></div>
     <section class="content">
       <section class="page active" id="page-inicio">
@@ -48,7 +48,7 @@
           <div class="home-intro card">
             <div>
               <span class="hero-kicker">Flujo operativo</span>
-              <h1>Sofía Martínez necesita atención</h1>
+              <h1 id="heroTitle">Sofía Martínez necesita atención</h1>
               <p>La pantalla inicial concentra lo urgente: alertas activas, atención médica, ficha del estudiante y comunicación con familias.</p>
             </div>
             <div class="home-actions">
@@ -61,7 +61,7 @@
             <div class="kpi"><small>Alertas activas</small><strong class="red" id="kpiAlerts">3</strong><em class="red" id="kpiAlertsSub">2 requieren atención</em></div>
             <div class="kpi"><small>Atenciones hoy</small><strong id="kpiCare">27</strong><em class="green">todas documentadas</em></div>
             <div class="kpi"><small>Familias informadas</small><strong class="green" id="kpiFamily">94%</strong><em class="green">confirmación registrada</em></div>
-            <div class="kpi"><small>Tiempo respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div>
+            <div class="kpi"><small>Tiempo respuesta</small><strong id="kpiResp">2m 34s</strong><em class="green" id="kpiRespSub">mejorando</em></div>
           </div>
 
           <div class="workflow-grid">

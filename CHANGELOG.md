@@ -1,6 +1,11 @@
 # NOVIMED — Changelog
 
-## V38a.1 (actual) — Hotfix de contaminación demo
+## V38a.2 (actual) — Corrección 360 de corteza demo
+- Hallazgo raíz: el H1 del héroe era HTML estático jamás conectado al estado (por eso persistía "Sofía" en tenants reales); ahora es dinámico.
+- Chip lateral, badges de campana/menú y KPI "Tiempo respuesta" ahora dinámicos y conscientes del tenant; fallbacks teatrales quedan exclusivos de la demo.
+- Marcador de versión V38.2 visible en Sistema para verificar qué build corre.
+
+## V38a.1 — Hotfix de contaminación demo
 - El caso activo de tenants reales nace en estado neutro ("Sin alertas activas"); el teatro de Sofía queda exclusivo de eight-demo.
 - Descontaminación automática única de casos ya sembrados con la firma demo en instituciones reales.
 - Textos de mapeo, feed vacío y alergia de alerta ahora son conscientes del tenant.

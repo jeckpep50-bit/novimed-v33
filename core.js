@@ -49,7 +49,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V38';
+const NOVIMED_VERSION='V38.2';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -164,6 +164,7 @@ window.novimedActivateTenant=function(schoolId,session){
   window.__novimedTenant=schoolId;
   if(schoolId==='eight-demo'){
     Object.keys(PRISTINE).forEach(k=>{state[k]=JSON.parse(JSON.stringify(PRISTINE[k]));});
+    state.alertSent=true; /* el teatro demo siempre tiene su caso activo */
   }else{
     state.students=[];state.inventory=[];state.inventoryHistory=[];
     state.careRecords=[];state.vaccines=[];state.riskProfiles=[];
@@ -596,6 +597,13 @@ function careCountToday(){
   return (state.careRecords||[]).filter(r=>r && r.date===today).length;
 }
 function formatDuration(ms){const m=Math.floor(ms/60000);const s=Math.round((ms%60000)/1000);return m+'m '+String(s).padStart(2,'0')+'s'}
+function avgResponseMs(){
+  if(!Array.isArray(state.alerts))return null;
+  const times=state.alerts.filter(a=>a&&Number.isFinite(a.attendedAt)&&Number.isFinite(a.createdAt)&&a.attendedAt>a.createdAt).map(a=>a.attendedAt-a.createdAt);
+  if(!times.length)return null;
+  return {avg:times.reduce((x,y)=>x+y,0)/times.length,n:times.length};
+}
+function isDemoTenant(){return window.__novimedTenant!=='eight-demo'?false:true}
 function familyReadPct(){
   if(!Array.isArray(state.alerts))return null;
   const closed=state.alerts.filter(a=>a&&a.status==='family_confirmed').length;
@@ -611,11 +619,10 @@ function renderReports(){
     const total=alerts.length;
     el('reportClosed').textContent=String(closed);
     el('reportClosedSub').textContent=total?Math.round(closed/total*100)+'% del total':'sin alertas aún';
-    const times=alerts.filter(a=>a&&Number.isFinite(a.attendedAt)&&Number.isFinite(a.createdAt)&&a.attendedAt>a.createdAt).map(a=>a.attendedAt-a.createdAt);
-    if(times.length){
-      const avg=times.reduce((x,y)=>x+y,0)/times.length;
-      el('reportAvg').textContent=formatDuration(avg);
-      el('reportAvgSub').textContent=times.length===1?'1 caso medido':times.length+' casos medidos';
+    const _r=avgResponseMs();
+    if(_r){
+      el('reportAvg').textContent=formatDuration(_r.avg);
+      el('reportAvgSub').textContent=_r.n===1?'1 caso medido':_r.n+' casos medidos';
     }else{
       el('reportAvg').textContent='—';
       el('reportAvgSub').textContent='aún sin mediciones';
@@ -624,7 +631,7 @@ function renderReports(){
     el('reportPrioLine').innerHTML=`<span class="chip red">Alta ${cnt('Alta')}</span><span class="chip amber">Media ${cnt('Media')}</span><span class="chip green">Baja ${cnt('Baja')}</span>`;
   }
   const pct=familyReadPct();
-  el('reportRead').textContent=pct===null?(state.familyRead?'96%':'94%'):pct+'%';
+  el('reportRead').textContent=pct!==null?pct+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
   const evaluated=(state.riskProfiles||[]).map(p=>calculateRisk(p));
   el('reportRisk').textContent=String(evaluated.filter(r=>r&&r.cls==='red').length);
   const freq={};
@@ -643,7 +650,25 @@ function renderSystemInfo(){
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
 function renderAll(){
-  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else{el('kpiAlerts').textContent=state.careSaved?'2':'3';}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();el('kpiFamily').textContent=_frp===null?(state.familyRead?'96%':'94%'):_frp+'%';renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();persistState()}
+  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
+  el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
+  const hero=el('heroTitle');
+  if(hero)hero.textContent=state.alertSent?((state.currentAlert&&state.currentAlert.studentName)||'Estudiante')+' necesita atención':'Sin alertas activas';
+  const pendN=Array.isArray(state.alerts)?state.alerts.filter(a=>a&&a.status==='pending').length:(isDemoTenant()?null:0);
+  [['navAlertPill'],['bellCount']].forEach(([id])=>{const n=el(id);if(!n)return;if(pendN===null)return;n.textContent=String(pendN);n.style.display=pendN===0?'none':'';});
+  const resp=avgResponseMs();
+  const kr=el('kpiResp'),krs=el('kpiRespSub');
+  if(kr){if(resp){kr.textContent=formatDuration(resp.avg);if(krs)krs.textContent=resp.n===1?'1 caso medido':resp.n+' casos medidos';}else if(!isDemoTenant()){kr.textContent='—';if(krs)krs.textContent='sin datos aún';}}
+  if(pendN===null){ /* demo antes de nube: restaurar teatro por si otro tenant lo pisó */
+    const dt=[['chipAlertas','3 alertas'],['chipAtenciones','27 atenciones'],['chipLectura','94% lectura'],['chipTiempo','2m 34s'],['bellCount','3'],['navAlertPill','3']];
+    dt.forEach(([id,v])=>{const n=el(id);if(n){n.textContent=v;n.style.display='';}});
+    if(kr&&!resp){kr.textContent='2m 34s';if(krs)krs.textContent='mejorando';}
+  }
+  const ca=el('chipAlertas');if(ca&&pendN!==null)ca.textContent=pendN+' alertas';
+  const cat=el('chipAtenciones');if(cat&&(!isDemoTenant()||Array.isArray(state.alerts)))cat.textContent=careCountToday()+' atenciones';
+  const cl=el('chipLectura');if(cl)cl.textContent=_frp!==null?_frp+'% lectura':(isDemoTenant()?'94% lectura':'— lectura');
+  const cti=el('chipTiempo');if(cti){if(resp)cti.textContent=formatDuration(resp.avg);else if(!isDemoTenant())cti.textContent='—';}
+  renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
 function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){
