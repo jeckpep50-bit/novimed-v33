@@ -38,7 +38,7 @@ Raíz multi-tenant: `schools/{SCHOOL_ID}/…` (V37: `SCHOOL_ID` constante `eight
 | `inventoryLog` | movimiento (auditoría) | time, name, qty, student, context, `createdAt` | desc |
 | `vaccines` | registro | student, course, age, reference, status, next, `createdAt` | asc |
 | `meta/seed`, `meta/seed-alerts` | banderas de siembra (transaccionales) | seededAt, version | — |
-| `cases/active-alert` (fuera de schools) | foco operativo efímero del dashboard | status, studentName, alertId, familyRead, … | — |
+| `schools/{id}/meta/active-case` (V38; antes cases/active-alert, hoy huérfano) | foco operativo efímero del dashboard | status, studentName, alertId, familyRead, … | — |
 
 `createdAt` es epoch-ms numérico en todas las colecciones (orden estable, sin mezclar tipos).
 
@@ -51,9 +51,9 @@ Raíz multi-tenant: `schools/{SCHOOL_ID}/…` (V37: `SCHOOL_ID` constante `eight
 ## 6. Seguridad — postura actual vs objetivo
 | Capa | V37 (actual) | Objetivo V38 |
 |---|---|---|
-| Identidad | Anónima | Email/contraseña + Custom Claims `role`, `schoolId` |
+| Identidad | Email/contraseña + claims (`role`,`schoolId`) con demo anónima conviviendo | App Check, SSO |
 | Roles | Simulados en UI | SuperAdmin, Admin_Colegio, Personal_Salud, Consulta |
-| Reglas Firestore | `auth != null` global | Mínimo privilegio por tenant y rol vía claims |
+| Reglas Firestore | `auth != null` global (V38b las endurece) | Mínimo privilegio por tenant y rol vía claims |
 | XSS | `escapeHtml` en todo dato de usuario + whitelist de colores | Igual |
 | Clave web | Restringida por referrer + 3 APIs | + App Check (post-V38) |
 | Entradas | Saneo central en `readOptional` (control chars, 500 máx) | Igual + validación server-side futura |

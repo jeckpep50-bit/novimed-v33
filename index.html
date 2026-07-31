@@ -170,7 +170,7 @@
       </section>
       <section class="page" id="page-familias"><div class="grid"><article class="card"><div class="section-head"><h3>Notificaciones familiares</h3><span class="badge green">Lectura activa</span></div><div id="familyNotices"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreen"></div></div></article></div></section>
       <section class="page" id="page-reportes"><div class="kpis"><div class="kpi"><small>Casos cerrados</small><strong class="green" id="reportClosed">—</strong><em class="green" id="reportClosedSub">calculando</em></div><div class="kpi"><small>Promedio respuesta</small><strong id="reportAvg">—</strong><em class="green" id="reportAvgSub">calculando</em></div><div class="kpi"><small>Lecturas familia</small><strong class="green" id="reportRead">—</strong><em>confirmadas</em></div><div class="kpi"><small>Riesgo alto</small><strong class="red" id="reportRisk">—</strong><em class="red">seguimiento</em></div></div><div class="cards3"><div class="card"><h3>Alertas por prioridad</h3><div class="chipline" id="reportPrioLine"><span class="chip">—</span></div></div><div class="card"><h3>Top motivos</h3><p id="reportTopMotivos">Aún sin atenciones registradas.</p></div><div class="card"><h3>Valor institucional</h3><p>Menos llamadas sueltas, más trazabilidad, mejores decisiones directivas.</p></div></div></section>
-      <section class="page" id="page-config"><div class="cards3"><div class="card"><h3>Roles</h3><p>Médico, docente, familia, directivo y administrador con accesos diferenciados.</p></div><div class="card"><h3>Notificaciones</h3><p>Alertas críticas, confirmación de lectura y recordatorios de seguimiento.</p></div><div class="card"><h3>Catálogos clínicos</h3><p>Síntomas frecuentes, medicamentos, alergias, vacunas y estados de atención.</p></div></div><div class="card" style="margin-top:18px"><h3>Sistema</h3><p><b>Versión:</b> <span id="configVersion">—</span> · <b>Institución:</b> <span id="configSchool">—</span></p><p><b>Sincronización:</b> <span id="configSyncStatus">—</span></p><p><b>Cola offline:</b> <span id="configPending">—</span></p><p id="configCounts" style="color:#71819b"></p></div></section>
+      <section class="page" id="page-config"><div class="cards3"><div class="card"><h3>Roles</h3><p>Médico, docente, familia, directivo y administrador con accesos diferenciados.</p></div><div class="card"><h3>Notificaciones</h3><p>Alertas críticas, confirmación de lectura y recordatorios de seguimiento.</p></div><div class="card"><h3>Catálogos clínicos</h3><p>Síntomas frecuentes, medicamentos, alergias, vacunas y estados de atención.</p></div></div><div class="card" style="margin-top:18px"><h3>Sistema</h3><p><b>Versión:</b> <span id="configVersion">—</span> · <b>Institución:</b> <span id="configSchool">—</span></p><p><b>Usuario:</b> <span id="configUser">—</span> · <b>Rol:</b> <span id="configRole">—</span></p><p><b>Sincronización:</b> <span id="configSyncStatus">—</span></p><p><button type="button" class="btn secondary" onclick="novimedLogout()">Cerrar sesión</button></p><p><b>Cola offline:</b> <span id="configPending">—</span></p><p id="configCounts" style="color:#71819b"></p></div></section>
     </section>
   </main>
 </div>
@@ -341,6 +341,19 @@
 
 <div class="modal" id="successModal" role="dialog" aria-modal="true" aria-labelledby="successTitle" aria-describedby="successText"><div class="modal-box success"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="36"><path d="m20 6-11 11-5-5"/></svg></div><h3 id="successTitle">Acción registrada</h3><p id="successText">El flujo fue actualizado correctamente.</p><div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal('successModal')">Continuar</button></div></div></div>
 
+<div id="authGate" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0b1f33,#123)">
+  <div class="card" style="width:min(420px,92vw);padding:28px">
+    <h2 style="margin:0 0 6px">Novimed</h2>
+    <p style="margin:0 0 18px;color:#71819b">Centro de bienestar institucional</p>
+    <label for="authEmail" style="display:block;font-size:13px;margin-bottom:6px">Correo institucional</label>
+    <input id="authEmail" type="email" autocomplete="username" maxlength="120" style="width:100%;padding:12px;border:1px solid #d6deea;border-radius:10px;margin-bottom:12px" placeholder="tu@colegio.edu.ec">
+    <label for="authPass" style="display:block;font-size:13px;margin-bottom:6px">Contraseña</label>
+    <input id="authPass" type="password" autocomplete="current-password" maxlength="120" style="width:100%;padding:12px;border:1px solid #d6deea;border-radius:10px;margin-bottom:14px" placeholder="••••••••">
+    <p id="authError" role="alert" style="display:none;color:#c0392b;font-size:13px;margin:0 0 12px"></p>
+    <button type="button" id="authLoginBtn" class="btn" style="width:100%;margin-bottom:10px">Ingresar</button>
+    <button type="button" id="authDemoBtn" class="btn secondary" style="width:100%">Explorar demo</button>
+  </div>
+</div>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

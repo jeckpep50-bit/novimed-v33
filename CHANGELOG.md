@@ -1,6 +1,13 @@
 # NOVIMED — Changelog
 
-## V37 (actual) — Hardening P5 + Documentación P7
+## V38a (actual) — Identidad y multi-tenant real (P2 fase 1)
+- Compuerta de autenticación: login email/contraseña con mapeo de errores en español + "Explorar demo" (anónimo). Sesiones anónimas existentes se reanudan sin corte.
+- Claims del token (`role`, `schoolId`) resuelven la institución: `SCHOOL_ID` deja de ser constante. Cuenta real sin institución ⇒ bloqueo seguro (denegación por defecto).
+- Tenants reales nacen VACÍOS (sin datos demo); `eight-demo` intacto como entorno de ventas con restauración prístina.
+- Aislamiento por institución de: caché local, cola offline y caso activo (ahora `schools/{id}/meta/active-case`).
+- Roles: Consulta = solo lectura con doble guarda (UI + wrappers de nube); Personal_Salud/Admin_Colegio/SuperAdmin escriben. Identidad visible en sidebar y panel Sistema; cierre de sesión con teardown completo de listeners.
+
+## V37 — Hardening P5 + Documentación P7
 - Cola de reintentos offline persistente (backoff 25s→300s, 6 intentos, dedupe por `clientOpId`, `not-found`=convergencia, estado visible en Sistema).
 - Caché local con esquema versionado (`v2`) + migración automática desde v1 + descarte seguro de corruptos.
 - Guardas de forma en los 6 listeners (un doc malformado no rompe el render) y saneo por colección (stock numérico, nombres string).

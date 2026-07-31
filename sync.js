@@ -19,6 +19,8 @@ import {
 import {
   getAuth,
   signInAnonymously,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged
 } from "firebase/auth";
 
@@ -43,11 +45,13 @@ const app = initializeApp(firebaseConfig);
    la lectura inicial funciona pero los push en vivo nunca llegan.
    Long polling es el transporte compatible recomendado por Firebase para estos entornos. */
 const db = initializeFirestore(app, { experimentalForceLongPolling: true });
-const caseRef = doc(db, "cases", "active-alert");
+let SCHOOL_ID = null; // V38: se resuelve por sesión (claims.schoolId) o modo demo
+/* V38: el caso activo vive DENTRO del tenant */
+const caseRef = () => doc(db, "schools", SCHOOL_ID, "meta", "active-case");
 
 window.firebaseApp = app;
 window.db = db;
-window.novimedCaseRef = caseRef;
+window.novimedCaseRef = caseRef; /* referencia; se invoca solo con sesión activa */
 
 /* ============================================================
    V31 — CAPA DE DATOS MULTI-COLECCIÓN (multi-tenant desde el día 1)
@@ -56,10 +60,10 @@ window.novimedCaseRef = caseRef;
    - Los listeners en vivo mantienen el estado local sincronizado entre dispositivos.
    - Si la nube no está disponible, la app cae al modo local existente (sin pérdida de UX).
    ============================================================ */
-const SCHOOL_ID = "eight-demo"; // ← raíz multi-tenant; en SaaS real vendrá de la cuenta institucional
+
 
 const colRef = (name) => collection(db, "schools", SCHOOL_ID, name);
-const seedRef = doc(db, "schools", SCHOOL_ID, "meta", "seed");
+const seedRef = () => doc(db, "schools", SCHOOL_ID, "meta", "seed");
 
 window.novimedCloudReady = false;
 
@@ -72,7 +76,8 @@ window.novimedCloudReady = false;
    Excluido por diseño: el caso activo y la alerta docente (estado
    de coordinación efímero; reproducirlo tarde induciría a error).
    ============================================================ */
-const QUEUE_KEY = "novimed_pending_ops_v1";
+const QUEUE_BASE_KEY = "novimed_pending_ops_v1";
+const queueKey = () => QUEUE_BASE_KEY + "::" + (SCHOOL_ID || "boot");
 const QUEUE_MAX_ATTEMPTS = 6;
 const QUEUE_BACKOFF_MS = [25000, 60000, 180000, 300000];
 
@@ -81,15 +86,16 @@ window.novimedNewOpId = makeOpId;
 
 function loadQueue(){
   try{
-    const raw = localStorage.getItem(QUEUE_KEY);
+    const raw = localStorage.getItem(queueKey());
     const q = raw ? JSON.parse(raw) : [];
     return Array.isArray(q) ? q.filter(o => o && o.type && o.opId) : [];
   }catch(e){ return []; }
 }
 function saveQueue(q){
-  try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){/* sin cuota: la cola vive en memoria */}
+  try{ localStorage.setItem(queueKey(), JSON.stringify(q)); }catch(e){/* sin cuota: la cola vive en memoria */}
 }
-let pendingOps = loadQueue();
+let pendingOps = [];
+function loadTenantQueue(){ pendingOps = loadQueue(); abandonNotified = false; }
 let abandonNotified = false;
 
 function enqueueOp(type, payload, opId){
@@ -206,10 +212,11 @@ function stripUndefined(obj){
 async function seedIfNeeded(){
   const s = window.novimedState;
   if(!s) return;
+  if(SCHOOL_ID !== "eight-demo") return; /* V38: tenants reales nacen vacíos (P4) */
   const won = await runTransaction(db, async (tx) => {
-    const snap = await tx.get(seedRef);
+    const snap = await tx.get(seedRef());
     if(snap.exists()) return false;
-    tx.set(seedRef, { seededAt: Date.now(), version: 31 });
+    tx.set(seedRef(), { seededAt: Date.now(), version: 31 });
     return true;
   });
   if(!won) return;
@@ -223,12 +230,13 @@ async function seedIfNeeded(){
   await batch.commit();
 }
 
-const seedAlertsRef = doc(db, "schools", SCHOOL_ID, "meta", "seed-alerts");
+const seedAlertsRef = () => doc(db, "schools", SCHOOL_ID, "meta", "seed-alerts");
 async function seedAlertsIfNeeded(){
+  if(SCHOOL_ID !== "eight-demo") return;
   const won = await runTransaction(db, async (tx) => {
-    const snap = await tx.get(seedAlertsRef);
+    const snap = await tx.get(seedAlertsRef());
     if(snap.exists()) return false;
-    tx.set(seedAlertsRef, { seededAt: Date.now(), version: 33 });
+    tx.set(seedAlertsRef(), { seededAt: Date.now(), version: 33 });
     return true;
   });
   if(!won) return;
@@ -241,11 +249,18 @@ async function seedAlertsIfNeeded(){
   await batch.commit();
 }
 
+let liveUnsubs = [];
+function teardownListeners(){
+  liveUnsubs.forEach(u => { try{ u(); }catch(e){/* noop */} });
+  liveUnsubs = [];
+  syncStarted = false;
+  window.novimedCloudReady = false;
+}
 function attachCollectionListeners(){
   const s = window.novimedState;
   if(!s) return;
   const bind = (name, order, map, mergeLocal) => {
-    onSnapshot(query(colRef(name), orderBy("createdAt", order)), (qs) => {
+    liveUnsubs.push(onSnapshot(query(colRef(name), orderBy("createdAt", order)), (qs) => {
       const arr = [];
       qs.forEach(d => {
         /* V37: un documento malformado jamás debe tumbar el render */
@@ -267,7 +282,7 @@ function attachCollectionListeners(){
     }, (error) => {
       console.error("Listener "+name+":", error);
       uiNotify("Sincronización parcial", "No se pudo escuchar '"+name+"' ("+(error.code||"error")+").");
-    });
+    }));
   };
   const asObj = d => { const x = d.data(); return (x && typeof x === "object") ? { id: d.id, ...x } : null; };
   bind("students", "asc", d => { const o = asObj(d); if(o) o.fullName = String(o.fullName || "Estudiante sin nombre"); return o; }, true);
@@ -313,7 +328,7 @@ window.novimedCloudUpdateStudent = (id, data, opId) =>
   cloudOp("updateStudent", { id, data }, opId);
 window.novimedCloudDeleteStudent = (id, opId) =>
   cloudOp("deleteStudent", { id }, opId);
-window.novimedSchoolLabel = SCHOOL_ID;
+
 
 function currentTimeLabel(){
   return new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
@@ -411,7 +426,7 @@ function mapFirestoreToLocalState(data){
 }
 
 async function ensureCaseExists(){
-  await setDoc(caseRef, {
+  await setDoc(caseRef(), {
     studentName: "Sofía Martínez",
     status: "alert_pending",
     allergy: "Maní",
@@ -425,11 +440,14 @@ async function ensureCaseExists(){
 }
 
 window.submitTeacherAlert = async function(){
+  if(window.novimedCanWrite && !window.novimedCanWrite()){ uiNotify("Solo lectura","Tu rol (Consulta) permite revisar la información, no modificarla."); return; }
+  const cloudSessionReady = !!SCHOOL_ID;
   const student = (document.getElementById("reportStudent")?.value || "Estudiante sin nombre").trim();
   const location = (document.getElementById("reportRoom")?.value || "Ubicación sin registrar").trim();
   const symptoms = (document.getElementById("reportSymptoms")?.value || "Síntomas sin especificar").trim();
 
   window.novimedSubmitTeacherAlertLocal?.();
+  if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{
     const alertRef = await addDoc(colRef("alerts"), {
@@ -442,7 +460,7 @@ window.submitTeacherAlert = async function(){
       createdAt: Date.now()
     });
     currentAlertDocId = alertRef.id;
-    await setDoc(caseRef, {
+    await setDoc(caseRef(), {
       studentName: student,
       status: "alert_pending",
       allergy: "Maní",
@@ -462,6 +480,8 @@ window.submitTeacherAlert = async function(){
 };
 
 window.submitCare = async function(){
+  if(window.novimedCanWrite && !window.novimedCanWrite()){ uiNotify("Solo lectura","Tu rol (Consulta) permite revisar la información, no modificarla."); return; }
+  const cloudSessionReady = !!SCHOOL_ID;
   const careStatus = document.getElementById("careStatus")?.value || "En observación";
   const eva = document.getElementById("careEva")?.value || "5 · Moderado";
   const careNote = document.getElementById("careObservations")?.value || document.getElementById("careActionDone")?.value || "Atención médica registrada y familia notificada.";
@@ -474,9 +494,10 @@ window.submitCare = async function(){
   const actionDone = document.getElementById("careActionDone")?.value || "Sin especificar";
 
   window.novimedSubmitCareLocal?.();
+  if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{
-    await updateDoc(caseRef, {
+    await updateDoc(caseRef(), {
       status: "in_observation",
       doctorNotified: true,
       familyRead: false,
@@ -505,10 +526,13 @@ window.submitCare = async function(){
 };
 
 window.confirmFamilyRead = async function(){
+  if(window.novimedCanWrite && !window.novimedCanWrite()){ uiNotify("Solo lectura","Tu rol (Consulta) permite revisar la información, no modificarla."); return; }
+  const cloudSessionReady = !!SCHOOL_ID;
   window.novimedConfirmFamilyReadLocal?.();
+  if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{
-    await updateDoc(caseRef, {
+    await updateDoc(caseRef(), {
       familyRead: true,
       status: "family_confirmed",
       familyReadTimeLabel: currentTimeLabel(),
@@ -542,7 +566,7 @@ function uiNotify(title, text){
 function startRealtimeSync(){
   if(syncStarted) return;
   syncStarted = true;
-  onSnapshot(caseRef, (snapshot) => {
+  liveUnsubs.push(onSnapshot(caseRef(), (snapshot) => {
     if(snapshot.exists()){
       mapFirestoreToLocalState(snapshot.data());
       safeRender();
@@ -558,37 +582,124 @@ function startRealtimeSync(){
     console.error("Error de sincronización Firestore:", error);
     uiNotify("Sin tiempo real","Firestore rechazó la conexión ("+(error.code||"error")+"). La app funciona en modo local.");
     window.novimedSyncStatus = "Sin tiempo real ("+(error.code||"error")+")";
-  });
+  }));
 }
 
-onAuthStateChanged(auth, (user) => {
-  if(user){
-    startRealtimeSync();
-    seedIfNeeded()
-      .catch(error => {
-        console.error("Seed:", error);
-        uiNotify("Aviso de datos","No se pudo verificar la siembra inicial ("+(error.code||"error")+").");
-      })
-      .then(() => seedAlertsIfNeeded())
-      .catch(error => console.error("Seed alerts:", error))
-      .finally(() => {
-        attachCollectionListeners();
-        window.novimedCloudReady = true;
-      });
+/* ============================================================
+   V38a — CICLO DE SESIÓN
+   - Sin arranque anónimo automático: la compuerta (authGate) ofrece
+     login por email/contraseña o "Explorar demo" (anónimo).
+   - Sesiones anónimas ya persistidas en dispositivos actuales se
+     reanudan solas: cero corte de servicio en la transición.
+   - Claims del token: role + schoolId. Cuenta email sin schoolId ⇒
+     bloqueo seguro (denegación por defecto).
+   ============================================================ */
+const gateEl = () => document.getElementById("authGate");
+function gateShow(){ const g = gateEl(); if(g) g.style.display = "flex"; }
+function gateHide(){ const g = gateEl(); if(g) g.style.display = "none"; }
+function gateError(msg){ const e = document.getElementById("authError"); if(e){ e.textContent = msg || ""; e.style.display = msg ? "block" : "none"; } }
+function gateBusy(busy){
+  const b = document.getElementById("authLoginBtn");
+  const d = document.getElementById("authDemoBtn");
+  if(b){ b.disabled = busy; b.textContent = busy ? "Ingresando…" : "Ingresar"; }
+  if(d) d.disabled = busy;
+}
+function loginErrorText(code){
+  switch(code){
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found": return "Correo o contraseña incorrectos.";
+    case "auth/invalid-email": return "El correo no tiene un formato válido.";
+    case "auth/too-many-requests": return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
+    case "auth/network-request-failed": return "Sin conexión. Verifica tu red e inténtalo de nuevo.";
+    case "auth/user-disabled": return "Esta cuenta fue deshabilitada. Contacta al administrador.";
+    default: return "No se pudo iniciar sesión ("+(code||"error")+").";
   }
-});
+}
+async function doEmailLogin(){
+  const email = (document.getElementById("authEmail")?.value || "").trim();
+  const pass = document.getElementById("authPass")?.value || "";
+  gateError("");
+  if(!email || !pass){ gateError("Escribe tu correo y contraseña."); return; }
+  gateBusy(true);
+  try{ await signInWithEmailAndPassword(auth, email, pass); }
+  catch(err){ gateError(loginErrorText(err.code)); }
+  finally{ gateBusy(false); }
+}
+function doDemoLogin(){
+  gateError(""); gateBusy(true);
+  signInAnonymously(auth).catch(err => gateError(loginErrorText(err.code))).finally(() => gateBusy(false));
+}
+(function wireGate(){
+  const lb = document.getElementById("authLoginBtn");
+  const db2 = document.getElementById("authDemoBtn");
+  const pw = document.getElementById("authPass");
+  if(lb) lb.addEventListener("click", doEmailLogin);
+  if(db2) db2.addEventListener("click", doDemoLogin);
+  if(pw) pw.addEventListener("keydown", e => { if(e.key === "Enter") doEmailLogin(); });
+})();
+window.novimedLogout = function(){
+  signOut(auth).catch(err => uiNotify("No se pudo cerrar sesión", err.code || "error"));
+};
 
-signInAnonymously(auth).catch((error) => {
-  console.error("No se pudo autenticar con Firebase. La app continúa en modo local:", error);
-  uiNotify("Sin conexión Firebase","Autenticación falló ("+(error.code||"error")+"). La app funciona en modo local.");
-  window.novimedSyncStatus = "Modo local (sin autenticación)";
+let currentUid = null;
+onAuthStateChanged(auth, async (user) => {
+  if(!user){
+    currentUid = null;
+    SCHOOL_ID = null;
+    teardownListeners();
+    window.novimedSyncStatus = "Sesión cerrada";
+    gateBusy(false); gateError("");
+    gateShow();
+    return;
+  }
+  if(user.uid === currentUid) return;
+  teardownListeners();
+  currentUid = user.uid;
+
+  let claims = {};
+  try{ claims = (await user.getIdTokenResult()).claims || {}; }
+  catch(e){ console.error("No se pudieron leer los claims:", e); }
+
+  if(!user.isAnonymous && !claims.schoolId){
+    /* Denegación por defecto: cuenta real sin institución asignada */
+    SCHOOL_ID = null;
+    gateBusy(false);
+    gateShow();
+    gateError("Tu cuenta aún no tiene institución asignada. Contacta al administrador de Novimed.");
+    return;
+  }
+
+  SCHOOL_ID = user.isAnonymous ? "eight-demo" : String(claims.schoolId);
+  const role = user.isAnonymous ? "Demo" : String(claims.role || "Consulta");
+  window.novimedSchoolLabel = SCHOOL_ID;
+  window.novimedSyncStatus = "Conectando…";
+
+  loadTenantQueue();
+  if(typeof window.novimedActivateTenant === "function"){
+    window.novimedActivateTenant(SCHOOL_ID, { role, email: user.email || null, anonymous: user.isAnonymous });
+  }
+  gateError(""); gateBusy(false); gateHide();
+
+  startRealtimeSync();
+  seedIfNeeded()
+    .catch(error => {
+      console.error("Seed:", error);
+      uiNotify("Aviso de datos","No se pudo verificar la siembra inicial ("+(error.code||"error")+").");
+    })
+    .then(() => seedAlertsIfNeeded())
+    .catch(error => console.error("Seed alerts:", error))
+    .finally(() => {
+      attachCollectionListeners();
+      window.novimedCloudReady = true;
+    });
 });
 
 /* V30.3 — Red de seguridad: Safari suspende pestañas en segundo plano.
    Al recuperar visibilidad, se relee el caso por si algún push se perdió. */
 document.addEventListener("visibilitychange", () => {
-  if(document.visibilityState === "visible" && auth.currentUser){
-    getDoc(caseRef).then((snapshot) => {
+  if(document.visibilityState === "visible" && auth.currentUser && SCHOOL_ID){
+    getDoc(caseRef()).then((snapshot) => {
       if(snapshot.exists()){
         mapFirestoreToLocalState(snapshot.data());
         safeRender();
