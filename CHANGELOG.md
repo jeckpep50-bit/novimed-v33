@@ -1,6 +1,11 @@
 # NOVIMED — Changelog
 
-## V38a (actual) — Identidad y multi-tenant real (P2 fase 1)
+## V38a.1 (actual) — Hotfix de contaminación demo
+- El caso activo de tenants reales nace en estado neutro ("Sin alertas activas"); el teatro de Sofía queda exclusivo de eight-demo.
+- Descontaminación automática única de casos ya sembrados con la firma demo en instituciones reales.
+- Textos de mapeo, feed vacío y alergia de alerta ahora son conscientes del tenant.
+
+## V38a — Identidad y multi-tenant real (P2 fase 1)
 - Compuerta de autenticación: login email/contraseña con mapeo de errores en español + "Explorar demo" (anónimo). Sesiones anónimas existentes se reanudan sin corte.
 - Claims del token (`role`, `schoolId`) resuelven la institución: `SCHOOL_ID` deja de ser constante. Cuenta real sin institución ⇒ bloqueo seguro (denegación por defecto).
 - Tenants reales nacen VACÍOS (sin datos demo); `eight-demo` intacto como entorno de ventas con restauración prístina.

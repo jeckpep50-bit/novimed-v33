@@ -141,7 +141,7 @@ function restoreState(){
 const PRISTINE=JSON.parse(JSON.stringify({
   students:state.students,inventory:state.inventory,inventoryHistory:state.inventoryHistory,
   careRecords:state.careRecords,vaccines:state.vaccines,riskProfiles:state.riskProfiles,
-  activities:state.activities
+  activities:state.activities,currentAlert:state.currentAlert,alertSent:state.alertSent
 }));
 let currentSession={role:'Demo',email:null,anonymous:true,schoolId:null};
 function sessionRole(){return currentSession.role}
@@ -168,6 +168,8 @@ window.novimedActivateTenant=function(schoolId,session){
     state.students=[];state.inventory=[];state.inventoryHistory=[];
     state.careRecords=[];state.vaccines=[];state.riskProfiles=[];
     state.activities=[['Ahora','blue','Sesión iniciada','Institución: '+schoolId]];
+    state.currentAlert={studentName:'Sin alertas activas',location:'El panel mostrará aquí la próxima alerta docente',symptoms:'Todo en calma por ahora.',allergy:'—',alertTimeLabel:''};
+    state.alertSent=false;
   }
   state.alerts=undefined;
   state.careSaved=false;state.familyRead=false;

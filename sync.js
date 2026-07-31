@@ -350,11 +350,14 @@ function mapFirestoreToLocalState(data){
   const s = window.novimedState;
   if(!s || !data) return;
 
-  const status = data.status || "alert_pending";
-  const studentName = data.studentName || "Sofía Martínez";
-  const location = data.location || "Aula 3B · 2° piso";
-  const symptoms = data.symptoms || "Mareo, náuseas y dolor abdominal durante la clase.";
-  s.currentAlert = {studentName, location, symptoms, allergy:data.allergy || "Maní", alertTimeLabel:data.alertTimeLabel || "Ahora"};
+  const isDemoTenant = SCHOOL_ID === "eight-demo";
+  if(looksLikeDemoLeak(data)){ cleanDemoLeakOnce(); return; }
+  const status = data.status || (isDemoTenant ? "alert_pending" : "idle");
+  const idleReal = !isDemoTenant && (status === "idle" || !data.studentName);
+  const studentName = data.studentName || (isDemoTenant ? "Sofía Martínez" : "Sin alertas activas");
+  const location = data.location || (isDemoTenant ? "Aula 3B · 2° piso" : "El panel mostrará aquí la próxima alerta docente");
+  const symptoms = data.symptoms || (isDemoTenant ? "Mareo, náuseas y dolor abdominal durante la clase." : "Todo en calma por ahora.");
+  s.currentAlert = {studentName, location, symptoms, allergy:data.allergy || (isDemoTenant ? "Maní" : "—"), alertTimeLabel:data.alertTimeLabel || (idleReal ? "" : "Ahora")};
   const familyRead = data.familyRead === true;
   const doctorNotified = data.doctorNotified === true;
   const careSaved = doctorNotified || status === "in_observation" || status === "attended" || status === "family_confirmed";
@@ -413,7 +416,9 @@ function mapFirestoreToLocalState(data){
     ]);
   }
 
-  if(activities.length === 0){
+  if(SCHOOL_ID !== "eight-demo"){
+    if(activities.length === 0) activities.push(["Ahora","blue","Sistema listo","Esperando la primera alerta docente"]);
+  }else if(activities.length === 0){
     activities.push(
       ["10:24","red",`Nueva alerta de ${studentName}`, location + " · docente reporta síntomas"],
       ["10:25","blue","Departamento médico notificado","Andrés Sánchez recibió alerta"],
@@ -425,8 +430,21 @@ function mapFirestoreToLocalState(data){
   s.activities = activities;
 }
 
+function neutralCasePayload(){
+  return {
+    studentName: "",
+    status: "idle",
+    allergy: "",
+    familyRead: false,
+    doctorNotified: false,
+    priority: "none",
+    location: "",
+    symptoms: "",
+    updatedAt: serverTimestamp()
+  };
+}
 async function ensureCaseExists(){
-  await setDoc(caseRef(), {
+  const payload = SCHOOL_ID === "eight-demo" ? {
     studentName: "Sofía Martínez",
     status: "alert_pending",
     allergy: "Maní",
@@ -436,7 +454,23 @@ async function ensureCaseExists(){
     location: "Aula 3B · 2° piso",
     symptoms: "Mareo, náuseas y dolor abdominal durante la clase.",
     updatedAt: serverTimestamp()
-  }, { merge: true });
+  } : neutralCasePayload();
+  await setDoc(caseRef(), payload, { merge: true });
+}
+/* V38a.1 — Descontaminación: si un tenant real quedó con el caso demo
+   sembrado por la versión anterior, se neutraliza una sola vez. */
+let demoLeakCleaned = false;
+function looksLikeDemoLeak(data){
+  return data && data.studentName === "Sofía Martínez"
+      && data.location === "Aula 3B · 2° piso"
+      && SCHOOL_ID && SCHOOL_ID !== "eight-demo";
+}
+function cleanDemoLeakOnce(){
+  if(demoLeakCleaned) return;
+  demoLeakCleaned = true;
+  setDoc(caseRef(), neutralCasePayload(), { merge: false })
+    .then(() => uiNotify("Panel restablecido","Se retiraron los datos de demostración de esta institución."))
+    .catch(err => console.error("Limpieza de caso demo:", err));
 }
 
 window.submitTeacherAlert = async function(){
@@ -463,7 +497,7 @@ window.submitTeacherAlert = async function(){
     await setDoc(caseRef(), {
       studentName: student,
       status: "alert_pending",
-      allergy: "Maní",
+      allergy: SCHOOL_ID === "eight-demo" ? "Maní" : "—",
       familyRead: false,
       doctorNotified: false,
       priority: "high",
