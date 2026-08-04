@@ -1,5 +1,18 @@
 # NOVIMED — Changelog
 
+## V40 (actual) — Infraestructura: App Check y entornos
+- App Check (reCAPTCHA v3) integrado con diseño defensivo: sin clave configurada queda inerte y la app funciona igual; un fallo suyo nunca deja sin servicio al personal de salud.
+- Configuración de Firebase por variables de entorno: un sitio de staging apunta a otro proyecto sin tocar código (`.env.example` documenta todas).
+- Entorno y estado de App Check visibles en Configuración → Sistema.
+- RUNBOOK ampliado: rollout de App Check en tres tiempos, montaje de staging y política de backups con prueba de restauración.
+
+
+## V39 (actual) — Techos de escalabilidad (H2) y rendimiento (H1)
+- H2: ventanas en vivo acotadas por colección + carga de histórico por cursor en el pager de Atenciones y Alertas. El costo de lecturas deja de ser proporcional al historial acumulado.
+- H1: render selectivo con seguimiento de páginas pendientes; ciclo completo forzado al navegar, al cambiar de institución y al cambiar de rol.
+- Documentación de arquitectura ampliada (§4b) con los límites, cursores y su justificación.
+
+
 ## V38a.2 (actual) — Corrección 360 de corteza demo
 - Hallazgo raíz: el H1 del héroe era HTML estático jamás conectado al estado (por eso persistía "Sofía" en tenants reales); ahora es dinámico.
 - Chip lateral, badges de campana/menú y KPI "Tiempo respuesta" ahora dinámicos y conscientes del tenant; fallbacks teatrales quedan exclusivos de la demo.

@@ -49,7 +49,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V38.2';
+const NOVIMED_VERSION='V40';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -60,8 +60,29 @@ function pagedRows(rows,key){
   return {rows:rows.slice(0,TABLE_PAGE_SIZE),extra:rows.length-TABLE_PAGE_SIZE};
 }
 function expandTable(key){tableExpanded[key]=true;renderAll();}
+/* V39 — H2: cuando la vista local ya está expandida y la colección tiene
+   histórico más antiguo en la nube, el mismo botón lo trae por cursor. */
+const CLOUD_COLLECTION_BY_TABLE={care:'careRecords',alerts:'alerts'};
+function tableHasCloudHistory(key){
+  const coll=CLOUD_COLLECTION_BY_TABLE[key];
+  return !!(coll && window.novimedHasOlder && window.novimedHasOlder(coll));
+}
+function loadOlderFor(key){
+  const coll=CLOUD_COLLECTION_BY_TABLE[key];
+  if(!coll || !window.novimedLoadOlder)return;
+  tableExpanded[key]=true;
+  const btn=el('pager-'+key);
+  if(btn){btn.disabled=true;btn.textContent='Cargando…';}
+  window.novimedLoadOlder(coll);
+}
 function pagerRow(colspan,key,extra){
-  return extra?`<tr><td colspan="${colspan}" style="text-align:center;padding:14px"><button type="button" class="btn secondary" onclick="expandTable('${key}')">Mostrar ${extra} más</button></td></tr>`:'';
+  if(extra){
+    return `<tr><td colspan="${colspan}" style="text-align:center;padding:14px"><button type="button" class="btn secondary" id="pager-${key}" onclick="expandTable('${key}')">Mostrar ${extra} más</button></td></tr>`;
+  }
+  if(tableHasCloudHistory(key)){
+    return `<tr><td colspan="${colspan}" style="text-align:center;padding:14px"><button type="button" class="btn secondary" id="pager-${key}" onclick="loadOlderFor('${key}')">Cargar registros anteriores</button></td></tr>`;
+  }
+  return '';
 }
 function emptyRow(colspan,text){return `<tr><td colspan="${colspan}" style="text-align:center;color:#71819b;padding:18px">${text}</td></tr>`}
 
@@ -175,6 +196,7 @@ window.novimedActivateTenant=function(schoolId,session){
   state.alerts=undefined;
   state.careSaved=false;state.familyRead=false;
   tableExpanded.students=false;tableExpanded.care=false;tableExpanded.alerts=false;
+  forceFullRender=true;
   restoreState();
   const nameEl=el('sidebarName'),roleEl=el('sidebarRole'),avEl=el('sidebarAvatar');
   if(currentSession.anonymous){
@@ -191,10 +213,31 @@ window.novimedActivateTenant=function(schoolId,session){
 };
 function showToast(t,txt){el('toastTitle').textContent=t;el('toastText').textContent=txt;el('toast').classList.add('show');setTimeout(()=>el('toast').classList.remove('show'),2800)}
 function activeAlert(){return state.currentAlert||{studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',allergy:'Maní',alertTimeLabel:'10:24'}}
-function showPage(page){const targetPage=el('page-'+page);if(!targetPage)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));targetPage.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>{const isActive=b.dataset.page===page;b.classList.toggle('active',isActive);if(isActive){b.setAttribute('aria-current','page')}else{b.removeAttribute('aria-current')}});const titles={inicio:['Centro de bienestar institucional','Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.'],roles:['Roles funcionales','Docente, médico, familia y directivo conectados.'],alertas:['Centro de alertas','Priorización de emergencias escolares.'],estudiantes:['Estudiantes','Fichas médicas y antecedentes relevantes.'],atenciones:['Registro médico escolar','Atenciones clínicas escolares documentadas.'],riesgo:['Priorización de riesgo','Priorización operativa basada en alertas, antecedentes y seguimiento.'],vacunas:['Control de vacunas','Registro y seguimiento según esquema nacional MSP.'],familias:['Familias','Notificaciones y confirmaciones de lectura.'],reportes:['Reportes','Indicadores para decisiones directivas.'],inventario:['Medicamentos disponibles','Stock, caducidad, reposición e historial de uso.'],config:['Configuración','Roles, notificaciones y catálogos clínicos.']};const t=titles[page]||['Novimed','Centro de bienestar institucional.'];el('pageTitle').textContent=t[0];el('pageSub').textContent=t[1];renderAll()}
+function showPage(page){const targetPage=el('page-'+page);if(!targetPage)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));targetPage.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>{const isActive=b.dataset.page===page;b.classList.toggle('active',isActive);if(isActive){b.setAttribute('aria-current','page')}else{b.removeAttribute('aria-current')}});const titles={inicio:['Centro de bienestar institucional','Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.'],roles:['Roles funcionales','Docente, médico, familia y directivo conectados.'],alertas:['Centro de alertas','Priorización de emergencias escolares.'],estudiantes:['Estudiantes','Fichas médicas y antecedentes relevantes.'],atenciones:['Registro médico escolar','Atenciones clínicas escolares documentadas.'],riesgo:['Priorización de riesgo','Priorización operativa basada en alertas, antecedentes y seguimiento.'],vacunas:['Control de vacunas','Registro y seguimiento según esquema nacional MSP.'],familias:['Familias','Notificaciones y confirmaciones de lectura.'],reportes:['Reportes','Indicadores para decisiones directivas.'],inventario:['Medicamentos disponibles','Stock, caducidad, reposición e historial de uso.'],config:['Configuración','Roles, notificaciones y catálogos clínicos.']};const t=titles[page]||['Novimed','Centro de bienestar institucional.'];el('pageTitle').textContent=t[0];el('pageSub').textContent=t[1];forceFullRender=true;renderAll()}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-function setRole(role){state.role=role;const d=roleData[role];el('sidebarAvatar').textContent=d[0];el('sidebarName').textContent=d[1];el('sidebarRole').textContent=d[2];document.querySelectorAll('.role-btn').forEach(b=>b.classList.toggle('active',b.dataset.role===role));document.querySelectorAll('.role-dashboard').forEach(x=>x.classList.remove('active'));const pane=el('role-'+role);if(pane)pane.classList.add('active');showToast('Vista cambiada',d[1]+' ahora está usando Novimed.');renderAll()}
+function setRole(role){state.role=role;const d=roleData[role];el('sidebarAvatar').textContent=d[0];el('sidebarName').textContent=d[1];el('sidebarRole').textContent=d[2];document.querySelectorAll('.role-btn').forEach(b=>b.classList.toggle('active',b.dataset.role===role));document.querySelectorAll('.role-dashboard').forEach(x=>x.classList.remove('active'));const pane=el('role-'+role);if(pane)pane.classList.add('active');forceFullRender=true;showToast('Vista cambiada',d[1]+' ahora está usando Novimed.');renderAll()}
 document.querySelectorAll('.role-btn').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
+/* ============================================================
+   V39 — H1: RENDER SELECTIVO
+   renderAll() reconstruía las 11 páginas en cada mutación y en cada
+   snapshot de Firestore. Ahora los renders de página se omiten si su
+   sección no está visible y se marcan como pendientes; showPage()
+   fuerza un ciclo completo al navegar, de modo que el usuario nunca ve
+   datos desactualizados. Inicio (feed, KPIs, incidente) se renderiza
+   siempre: alimenta indicadores globales visibles desde cualquier vista.
+   ============================================================ */
+const PAGE_OF_RENDER={renderAlerts:'alertas',renderCare:'atenciones',renderStudents:'estudiantes',renderVaccines:'vacunas',renderInventory:'inventario',renderRisk:'riesgo',renderRoles:'roles',renderFamily:'familias',renderReports:'reportes'};
+let forceFullRender=true;
+const dirtyPages={};
+function pageIsVisible(page){const n=el('page-'+page);return !!n&&n.classList.contains('active')}
+function shouldRender(name){
+  const page=PAGE_OF_RENDER[name];
+  if(!page)return true;
+  if(forceFullRender)return true;
+  if(pageIsVisible(page)){dirtyPages[page]=false;return true}
+  dirtyPages[page]=true;
+  return false;
+}
 const DOT_COLORS={red:'red',blue:'blue',green:'green',amber:'amber'};
 function renderFeed(){el('activityFeed').innerHTML=state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}
 function alertStatusLabel(st){return st==='pending'?'Pendiente':(st==='attended'?'Atendida':(st==='family_confirmed'?'Cerrada':(st||'—')))}
@@ -645,12 +688,13 @@ function renderSystemInfo(){
   const sc=el('configSchool');if(sc)sc.textContent=window.novimedSchoolLabel||'—';
   const pend=window.novimedPendingOpsCount?window.novimedPendingOpsCount():0;
   const pn=el('configPending');if(pn)pn.textContent=pend>0?(pend+' operación(es) pendiente(s) de sincronizar'):'Todo sincronizado';
+  const ce=el('configEnv');if(ce)ce.textContent=(window.novimedEnvName||'producción')+' · App Check: '+(window.novimedAppCheck||'no configurado');
   const cu=el('configUser');if(cu)cu.textContent=currentSession.anonymous?'Modo demo (sin cuenta)':(currentSession.email||'—');
   const cr=el('configRole');if(cr)cr.textContent=roleLabel(sessionRole());
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
 function renderAll(){
-  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();renderAlerts();renderCare();renderFamily();renderStudents();renderVaccines();renderInventory();renderRisk();renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
+  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
   el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
   const hero=el('heroTitle');
   if(hero)hero.textContent=state.alertSent?((state.currentAlert&&state.currentAlert.studentName)||'Estudiante')+' necesita atención':'Sin alertas activas';
@@ -668,7 +712,7 @@ function renderAll(){
   const cat=el('chipAtenciones');if(cat&&(!isDemoTenant()||Array.isArray(state.alerts)))cat.textContent=careCountToday()+' atenciones';
   const cl=el('chipLectura');if(cl)cl.textContent=_frp!==null?_frp+'% lectura':(isDemoTenant()?'94% lectura':'— lectura');
   const cti=el('chipTiempo');if(cti){if(resp)cti.textContent=formatDuration(resp.avg);else if(!isDemoTenant())cti.textContent='—';}
-  renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();persistState()}
+  if(shouldRender('renderReports'))renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
 function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){
@@ -810,6 +854,6 @@ window.novimedConfirmFamilyReadLocal = confirmFamilyRead;
   ['confirmFamilyRead',confirmFamilyRead],['setRole',setRole],
   ['submitTeacherAlert',submitTeacherAlert],['submitCare',submitCare],
   ['setBodyArea',setBodyArea],
-  ['expandTable',expandTable],['openEditStudentModal',openEditStudentModal],
+  ['expandTable',expandTable],['loadOlderFor',loadOlderFor],['openEditStudentModal',openEditStudentModal],
   ['deleteStudent',deleteStudent],['exportCareCSV',exportCareCSV],['exportStudentsCSV',exportStudentsCSV]
 ].forEach(([name,fn])=>{ if(typeof fn==='function') window[name]=window[name]||fn; });

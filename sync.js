@@ -1,10 +1,14 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import {
   initializeFirestore,
   collection,
   addDoc,
   query,
   orderBy,
+  limit,
+  startAfter,
+  getDocs,
   runTransaction,
   writeBatch,
   increment,
@@ -30,17 +34,48 @@ import {
    1. Verificar que la clave anterior fue DESHABILITADA en Google Cloud Console → Credentials.
    2. Restringir esta clave por HTTP referrer al dominio de producción.
    3. Evolución futura: email/password con roles (médico, docente, familia, directivo). */
+/* V40 — Configuración por entorno.
+   Sin variables definidas usa producción (comportamiento idéntico al actual).
+   Un sitio de staging solo necesita definir estas variables en Netlify:
+   apunta al proyecto Firebase de pruebas sin modificar una línea de código. */
+const env = import.meta.env || {};
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCnZE08xhYV5KHZfGDoHj1KMRn16hLEe18",
-  authDomain: "novimed-2c5e9.firebaseapp.com",
-  projectId: "novimed-2c5e9",
-  storageBucket: "novimed-2c5e9.firebasestorage.app",
-  messagingSenderId: "750799724381",
-  appId: "1:750799724381:web:638f41cb950a83a617d2b4",
-  measurementId: "G-ZL3PW9N40F"
+  apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyCnZE08xhYV5KHZfGDoHj1KMRn16hLEe18",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "novimed-2c5e9.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "novimed-2c5e9",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "novimed-2c5e9.firebasestorage.app",
+  messagingSenderId: env.VITE_FIREBASE_SENDER_ID || "750799724381",
+  appId: env.VITE_FIREBASE_APP_ID || "1:750799724381:web:638f41cb950a83a617d2b4",
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || "G-ZL3PW9N40F"
 };
+const ENV_NAME = env.VITE_NOVIMED_ENV || (firebaseConfig.projectId === "novimed-2c5e9" ? "producción" : "staging");
+window.novimedEnvName = ENV_NAME;
 
 const app = initializeApp(firebaseConfig);
+
+/* ============================================================
+   V40 — APP CHECK (reCAPTCHA v3)
+   Las reglas controlan QUÉ puede hacer una sesión; App Check controla
+   que la llamada provenga de esta app y no de un script externo.
+   Diseño defensivo deliberado: sin clave configurada NO se inicializa
+   y la app funciona exactamente como hoy. Un fallo de App Check nunca
+   debe dejar sin servicio al personal de salud, así que su ausencia es
+   un no-evento y su error se reporta sin bloquear el arranque.
+   Rollout: monitor (sin aplicar) → verificar métricas → aplicar. */
+const APPCHECK_SITE_KEY = env.VITE_APPCHECK_SITE_KEY || "";
+window.novimedAppCheck = "no configurado";
+if(APPCHECK_SITE_KEY){
+  try{
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(APPCHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true
+    });
+    window.novimedAppCheck = "activo";
+  }catch(error){
+    console.error("App Check no pudo inicializarse:", error);
+    window.novimedAppCheck = "error (" + (error.code || "desconocido") + ")";
+  }
+}
 /* V30.3 — Safari/iOS y redes institucionales cortan el canal WebChannel de Firestore:
    la lectura inicial funciona pero los push en vivo nunca llegan.
    Long polling es el transporte compatible recomendado por Firebase para estos entornos. */
@@ -253,14 +288,73 @@ let liveUnsubs = [];
 function teardownListeners(){
   liveUnsubs.forEach(u => { try{ u(); }catch(e){/* noop */} });
   liveUnsubs = [];
+  Object.keys(oldestLive).forEach(k => delete oldestLive[k]);
+  Object.keys(noMoreOlder).forEach(k => delete noMoreOlder[k]);
+  liveMappers = {};
   syncStarted = false;
   window.novimedCloudReady = false;
 }
+/* ============================================================
+   V39 — H2: VENTANAS EN VIVO ACOTADAS
+   Sin límite, cada listener descargaba la colección completa: el costo
+   de lecturas de Firestore y el trabajo de render crecían sin techo con
+   el historial del colegio. Cada colección escucha ahora una ventana
+   reciente; el histórico anterior se trae bajo demanda por cursor
+   (loadOlder), sin listener adicional.
+   students/inventory NO se acotan por diseño: son catálogos operativos
+   de tamaño acotado (matrícula, botiquín) que la UI necesita completos
+   para búsqueda, fichas y selectores de medicación.
+   ============================================================ */
+const LIVE_WINDOW = { careRecords: 200, alerts: 200, inventoryLog: 200, vaccines: 500 };
+const PAGE_SIZE = 200;
+const oldestLive = {};   /* último doc de la ventana viva, por colección */
+const noMoreOlder = {};  /* colecciones cuyo histórico ya se agotó */
+window.novimedHasOlder = (name) => !!oldestLive[name] && !noMoreOlder[name];
+
+async function loadOlder(name){
+  if(!SCHOOL_ID || !oldestLive[name] || noMoreOlder[name]) return 0;
+  const st = window.novimedState;
+  if(!st) return 0;
+  const key = name === "inventoryLog" ? "inventoryHistory" : name;
+  const mapper = liveMappers[name];
+  if(!mapper) return 0;
+  try{
+    const qs = await getDocs(query(colRef(name), orderBy("createdAt", "desc"), startAfter(oldestLive[name]), limit(PAGE_SIZE)));
+    if(qs.empty){ noMoreOlder[name] = true; safeRender(); return 0; }
+    const older = [];
+    qs.forEach(d => {
+      try{ const item = mapper(d); if(item !== null && item !== undefined) older.push(item); }
+      catch(e){ console.error("Doc inválido en histórico '"+name+"':", e); }
+    });
+    oldestLive[name] = qs.docs[qs.docs.length - 1];
+    if(qs.size < PAGE_SIZE) noMoreOlder[name] = true;
+    st[key] = [...(st[key] || []), ...older];
+    safeRender();
+    uiNotify("Histórico cargado", older.length + " registros anteriores añadidos a la vista.");
+    return older.length;
+  }catch(err){
+    console.error("Histórico '"+name+"':", err);
+    uiNotify("No se pudo cargar el histórico", (err.code || "error"));
+    return 0;
+  }
+}
+window.novimedLoadOlder = loadOlder;
+
+let liveMappers = {};
 function attachCollectionListeners(){
   const s = window.novimedState;
   if(!s) return;
   const bind = (name, order, map, mergeLocal) => {
-    liveUnsubs.push(onSnapshot(query(colRef(name), orderBy("createdAt", order)), (qs) => {
+    liveMappers[name] = map;
+    const win = LIVE_WINDOW[name];
+    const q = win
+      ? query(colRef(name), orderBy("createdAt", order), limit(win))
+      : query(colRef(name), orderBy("createdAt", order));
+    liveUnsubs.push(onSnapshot(q, (qs) => {
+      if(win && order === "desc" && qs.docs.length){
+        oldestLive[name] = qs.docs[qs.docs.length - 1];
+        if(qs.size < win) noMoreOlder[name] = true;
+      }
       const arr = [];
       qs.forEach(d => {
         /* V37: un documento malformado jamás debe tumbar el render */

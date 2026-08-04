@@ -42,6 +42,12 @@ Raíz multi-tenant: `schools/{SCHOOL_ID}/…` (V37: `SCHOOL_ID` constante `eight
 
 `createdAt` es epoch-ms numérico en todas las colecciones (orden estable, sin mezclar tipos).
 
+## 4b. Rendimiento y límites (V39)
+- **Ventanas en vivo**: `careRecords`, `alerts`, `inventoryLog` escuchan los 200 documentos más recientes; `vaccines` 500. `students` e `inventory` sin límite por diseño (catálogos operativos que la UI necesita completos para búsqueda, fichas y selector de medicación).
+- **Histórico bajo demanda**: `novimedLoadOlder(coll)` pagina por cursor (`startAfter` + `limit(200)`) sin abrir listeners nuevos. La UI lo expone en el mismo pager de tabla cuando la vista local se agota.
+- **Render selectivo**: los renders de página se omiten si su sección no está visible y quedan marcados como pendientes; `showPage()`, el cambio de tenant y el cambio de rol fuerzan un ciclo completo. Inicio se renderiza siempre (alimenta KPIs e indicadores globales).
+- Efecto combinado: el costo de lecturas Firestore deja de crecer con el historial del colegio, y el trabajo de DOM por evento baja de 11 páginas a 1 + Inicio.
+
 ## 5. Estrategia offline (V37)
 1. **Lectura**: caché localStorage `novimed_local_state_v2` con envoltura `{schema, savedAt, data}`. Esquema desconocido/corrupto ⇒ descarte seguro. Migración automática única desde `…_v1`.
 2. **Escritura**: cola `novimed_pending_ops_v1` con backoff 25s/60s/180s/300s, máx 6 intentos; disparadores: intervalo 25s, evento `online`, `novimedProcessQueueNow()`. Deduplicación: el doc lleva `clientOpId`; el merge de listeners descarta la copia local `_pendingOpId` cuando el doc llega. `not-found` en reintento ⇒ convergencia (éxito terminal). Tras 6 intentos ⇒ `abandoned` (dato conservado localmente, aviso único, visible en panel Sistema).
@@ -55,7 +61,7 @@ Raíz multi-tenant: `schools/{SCHOOL_ID}/…` (V37: `SCHOOL_ID` constante `eight
 | Roles | Simulados en UI | SuperAdmin, Admin_Colegio, Personal_Salud, Consulta |
 | Reglas Firestore | `auth != null` global (V38b las endurece) | Mínimo privilegio por tenant y rol vía claims |
 | XSS | `escapeHtml` en todo dato de usuario + whitelist de colores | Igual |
-| Clave web | Restringida por referrer + 3 APIs | + App Check (post-V38) |
+| Clave web | Restringida por referrer + 3 APIs + App Check (V40, opt-in por variable) | Enforce tras periodo monitor |
 | Entradas | Saneo central en `readOptional` (control chars, 500 máx) | Igual + validación server-side futura |
 
 ## 7. Contratos internos (window.*)
