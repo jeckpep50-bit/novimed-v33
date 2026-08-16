@@ -1,19 +1,36 @@
 # NOVIMED — Changelog
 
-## V40 (actual) — Infraestructura: App Check y entornos
+## V41 (actual) — Verdad clínica: autoría, claves foráneas y archivado
+
+**V40.1 — Hotfix de seguridad clínica (incluido)**
+- El aviso de alergias del incidente era HTML estático (`Alergia conocida: maní`) que ningún render tocaba: en cualquier institución real afirmaba alergia al maní para cualquier estudiante. Ahora deriva de la ficha enlazada por `studentId` y declara explícitamente "Sin ficha enlazada — verificar manualmente" cuando no hay vínculo. Sin valores por defecto en campos clínicos.
+- El campo `allergy` desaparece del modelo del caso: era un dato copiado que la UI mostraba como verificado. Las alergias se derivan siempre de la ficha en tiempo de render.
+- Modal de alerta docente: se retiran los prellenados demo (Sofía Martínez / Aula 3B / síntomas) y el estudiante pasa a elegirse de la matrícula real. El texto libre queda como excepción explícitamente rotulada como "sin ficha enlazada".
+- Módulo Familias: se retira "Simular confirmación familiar" de instituciones reales. El estado honesto es **Notificación registrada · lectura no confirmada**; la simulación queda rotulada y confinada a `eight-demo`. Los nombres fijos (Ana Martínez / Sofía) se sustituyen por los contactos de emergencia de la ficha.
+- Badge "3 activas" del Centro de alertas: dinámico.
+
+**V41 — Trazabilidad y esquema**
+- **Autoría obligatoria**: toda escritura clínica lleva `createdBy {uid, email, role}` + `serverCreatedAt`/`updatedAt` de servidor. `authored()` es el único camino a Firestore. El sentinel `serverTimestamp()` se aplica al ejecutar, nunca en el payload que puede quedar encolado en localStorage.
+- **Claves foráneas**: `alerts`, `careRecords`, `vaccines` e `inventoryLog` usan `studentId`. `studentName` queda desnormalizado solo para lectura. Los documentos anteriores se normalizan en el mapper (`student` → `studentName`) sin reescribir el histórico.
+- **Archivado lógico**: `deleteStudent` (borrado en duro con `window.confirm`) se sustituye por `archiveStudent` con motivo obligatorio y autoría. `deleteDoc` desaparece del código. El tipo de cola `deleteStudent` se remapea al archivado para drenar con seguridad las operaciones pendientes de V40.
+- **`invUse` atómico**: `Promise.all` de dos escrituras → `writeBatch`. Elimina el riesgo de doble descuento de stock en reintentos (deuda reconocida en ARCHITECTURE §8).
+- **Confirmación familiar corregida**: escribía sobre `careRecords[0]` (el más reciente); ahora resuelve por el `careRecordId` que el caso enlaza. Sin vínculo, no escribe sobre ningún expediente.
+- `inventoryLog` pasa de array posicional a objeto con `date` y `studentId`.
+
+## V40 — Infraestructura: App Check y entornos
 - App Check (reCAPTCHA v3) integrado con diseño defensivo: sin clave configurada queda inerte y la app funciona igual; un fallo suyo nunca deja sin servicio al personal de salud.
 - Configuración de Firebase por variables de entorno: un sitio de staging apunta a otro proyecto sin tocar código (`.env.example` documenta todas).
 - Entorno y estado de App Check visibles en Configuración → Sistema.
 - RUNBOOK ampliado: rollout de App Check en tres tiempos, montaje de staging y política de backups con prueba de restauración.
 
 
-## V39 (actual) — Techos de escalabilidad (H2) y rendimiento (H1)
+## V39 — Techos de escalabilidad (H2) y rendimiento (H1)
 - H2: ventanas en vivo acotadas por colección + carga de histórico por cursor en el pager de Atenciones y Alertas. El costo de lecturas deja de ser proporcional al historial acumulado.
 - H1: render selectivo con seguimiento de páginas pendientes; ciclo completo forzado al navegar, al cambiar de institución y al cambiar de rol.
 - Documentación de arquitectura ampliada (§4b) con los límites, cursores y su justificación.
 
 
-## V38a.2 (actual) — Corrección 360 de corteza demo
+## V38a.2 — Corrección 360 de corteza demo
 - Hallazgo raíz: el H1 del héroe era HTML estático jamás conectado al estado (por eso persistía "Sofía" en tenants reales); ahora es dinámico.
 - Chip lateral, badges de campana/menú y KPI "Tiempo respuesta" ahora dinámicos y conscientes del tenant; fallbacks teatrales quedan exclusivos de la demo.
 - Marcador de versión V38.2 visible en Sistema para verificar qué build corre.

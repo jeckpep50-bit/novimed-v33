@@ -11,7 +11,7 @@
 <meta property="og:title" content="Novimed — Centro de bienestar institucional" />
 <meta property="og:description" content="Gestión médica escolar con alertas, trazabilidad, familias conectadas y reportes institucionales." />
 <meta property="og:type" content="website" />
-<title>Novimed V40 — Centro de bienestar institucional</title>
+<title>Novimed V41 — Centro de bienestar institucional</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -68,7 +68,7 @@
             <article class="card priority-card">
               <div class="section-head"><h3>Incidente principal</h3><span class="badge red" id="mainBadge">Acción requerida</span></div>
               <div class="student"><div class="avatar" id="mainStudentAvatar">SM</div><div><h4 id="mainStudentName">Sofía Martínez</h4><p id="mainStudentMeta">3° Secundaria — Aula 3B · 2° piso</p></div></div>
-              <div class="alert-note">Alergia conocida: maní</div>
+              <div class="alert-note unlinked" id="mainAllergyNote">Sin ficha enlazada — verificar manualmente</div>
               <div class="symptoms"><small>Síntomas reportados</small><b id="mainSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</b></div>
               <div class="actions"><button type="button" class="btn primary" id="openAttention">Atender y notificar</button><button type="button" class="btn secondary" id="openFicha">Ver ficha médica</button><button type="button" class="btn ghost" id="goDemo">Abrir flujo por roles</button></div>
             </article>
@@ -94,14 +94,14 @@
         <div id="role-medico" class="role-dashboard active"></div><div id="role-docente" class="role-dashboard"></div><div id="role-familia" class="role-dashboard"></div><div id="role-directivo" class="role-dashboard"></div>
       </section>
 
-      <section class="page" id="page-alertas"><div class="section-head"><h3>Centro de alertas</h3><div style="display:flex;gap:10px;align-items:center"><span class="badge red">3 activas</span><button type="button" class="btn primary" onclick="openReportModal()">Nueva alerta</button></div></div><div class="card"><table class="table" id="alertsTable" aria-label="Tabla de alertas médicas"></table></div></section>
+      <section class="page" id="page-alertas"><div class="section-head"><h3>Centro de alertas</h3><div style="display:flex;gap:10px;align-items:center"><span class="badge red" id="alertsActiveBadge">—</span><button type="button" class="btn primary" onclick="openReportModal()">Nueva alerta</button></div></div><div class="card"><table class="table" id="alertsTable" aria-label="Tabla de alertas médicas"></table></div></section>
       <section class="page" id="page-estudiantes">
         <div class="section-head">
           <h3>Estudiantes</h3>
           <div style="display:flex;gap:10px;align-items:center"><span class="badge blue">Fichas activas</span><button type="button" class="btn primary" onclick="openStudentModal()">Nueva ficha médica</button></div>
         </div>
         <div class="card">
-          <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button type="button" class="btn secondary" onclick="exportStudentsCSV()">Exportar CSV</button></div><table class="table" id="studentsTable" aria-label="Tabla de estudiantes y condiciones registradas"></table>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:12px"><button type="button" class="btn secondary" id="toggleArchivedBtn" onclick="toggleArchivedStudents()">Mostrar archivadas</button><button type="button" class="btn secondary" onclick="exportStudentsCSV()">Exportar CSV</button></div><table class="table" id="studentsTable" aria-label="Tabla de estudiantes y condiciones registradas"></table>
         </div>
       </section>
       <section class="page" id="page-riesgo">
@@ -175,7 +175,7 @@
   </main>
 </div>
 
-<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><input id="reportStudent" value="Sofía Martínez"></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" value="Aula 3B · 2° piso"></div></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</textarea></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
+<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><select id="reportStudent"></select></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" placeholder="Ej. Aula 6B · 2° piso"></div></div><div class="field" id="reportStudentOtherField" style="display:none"><label for="reportStudentOther">Nombre del estudiante no registrado</label><input id="reportStudentOther" placeholder="Nombre y apellidos"><p class="field-hint">Esta alerta quedará marcada como <b>no enlazada a ficha</b>: el personal de salud no podrá ver alergias ni antecedentes.</p></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms" placeholder="Describe lo que observas: inicio, síntomas, estado del estudiante"></textarea></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
 <div class="modal" id="fichaModal" role="dialog" aria-modal="true" aria-labelledby="fichaModalTitle">
   <div class="modal-box">
     <h3 id="fichaModalTitle">Ficha médica estudiantil</h3>

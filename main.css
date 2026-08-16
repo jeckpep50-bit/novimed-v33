@@ -1110,3 +1110,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     display:block!important;
   }
 }
+
+
+/* ============================================================
+   V40.1 — ESTADOS DEL AVISO CLÍNICO DEL INCIDENTE
+   El nodo de alergias tiene tres estados visualmente distintos y
+   ninguno por defecto: información crítica, ausencia verificada de
+   antecedentes, y ausencia de ficha enlazada (que NO es lo mismo).
+   ============================================================ */
+.alert-note.critical{background:linear-gradient(135deg,#fff1f2,#fff7f7);border-color:#fecaca;color:#8c1d1d}
+.alert-note.clear{background:linear-gradient(135deg,#f0fdf9,#f7fffd);border-color:#bbf7d0;color:#0f5c46}
+.alert-note.unlinked{background:linear-gradient(135deg,#f5f7fa,#fbfcfe);border-color:#cfd9e6;color:#44546b;font-weight:800}
+.field-hint{margin-top:8px;font-size:12px;line-height:1.45;color:#8a5b00;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:9px 11px;font-weight:700}
+.row-archived td{opacity:.62}

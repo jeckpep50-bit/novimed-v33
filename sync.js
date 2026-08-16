@@ -16,7 +16,6 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
   onSnapshot,
   serverTimestamp
 } from "firebase/firestore";
@@ -103,6 +102,39 @@ const seedRef = () => doc(db, "schools", SCHOOL_ID, "meta", "seed");
 window.novimedCloudReady = false;
 
 /* ============================================================
+   V41 — AUTORÍA Y AUDITORÍA (C5)
+   Ninguna escritura clínica tenía autor: un registro médico sin autor
+   carece de valor probatorio. Toda escritura lleva ahora:
+     createdBy   { uid, email, role }  — plano, seguro para JSON (cola offline)
+     createdAt   epoch-ms               — ordenamiento estable (no cambiar: hay índices)
+     serverCreatedAt / updatedAt        — serverTimestamp(), reloj de confianza
+   El sentinel serverTimestamp() NO sobrevive a JSON.stringify, así que se
+   aplica al EJECUTAR la operación, nunca al construir el payload que puede
+   quedar encolado en localStorage.
+   ============================================================ */
+let IDENTITY = null;
+function setIdentity(user, role, schoolId){
+  IDENTITY = user ? {
+    uid: user.uid,
+    email: user.email || null,
+    role: String(role || "Desconocido"),
+    anonymous: !!user.isAnonymous,
+    schoolId: schoolId || null
+  } : null;
+}
+function authorStamp(){
+  return IDENTITY
+    ? { uid: IDENTITY.uid, email: IDENTITY.email, role: IDENTITY.role }
+    : { uid: null, email: null, role: "Desconocido" };
+}
+window.novimedIdentity = () => IDENTITY;
+const serverCreate = () => ({ serverCreatedAt: serverTimestamp() });
+const serverUpdate = () => ({ updatedAt: serverTimestamp(), updatedBy: authorStamp() });
+/* Atención vinculada al caso activo: sustituye al uso de careRecords[0]. */
+let linkedCareRecordId = null;
+window.novimedLinkedCareRecordId = () => linkedCareRecordId;
+
+/* ============================================================
    V37 — COLA DE REINTENTOS OFFLINE (P5)
    Escrituras fallidas se encolan en localStorage y se reintentan
    con backoff (25s→60s→180s→300s, máx 6 intentos). La deduplicación
@@ -141,16 +173,38 @@ function enqueueOp(type, payload, opId){
 window.novimedPendingOpsCount = () => pendingOps.filter(o => o.status !== "done").length;
 
 const queueExecutors = {
-  addStudent:      (p) => addDoc(colRef("students"), p),
-  addInventoryItem:(p) => addDoc(colRef("inventory"), p),
-  addCareRecord:   (p) => addDoc(colRef("careRecords"), p),
-  invUse:          (p) => Promise.all([
-                      updateDoc(doc(colRef("inventory"), p.itemId), { stock: increment(-1) }),
-                      addDoc(colRef("inventoryLog"), p.logEntry)
-                    ]),
-  updateStudent:   (p) => updateDoc(doc(colRef("students"), p.id), p.data),
-  deleteStudent:   (p) => deleteDoc(doc(colRef("students"), p.id)),
-  confirmFamily:   (p) => updateDoc(doc(colRef("careRecords"), p.recordId), { family: "Confirmada" })
+  addStudent:      (p) => addDoc(colRef("students"), { ...p, ...serverCreate() }),
+  addInventoryItem:(p) => addDoc(colRef("inventory"), { ...p, ...serverCreate() }),
+  addCareRecord:   (p) => addDoc(colRef("careRecords"), { ...p, ...serverCreate() }),
+  /* V41/A5 — antes: Promise.all de dos escrituras. Si el descuento aterrizaba
+     y el log fallaba, el reintento descontaba stock por segunda vez.
+     writeBatch la hace atómica: o ambas, o ninguna. */
+  invUse:          (p) => {
+                      const batch = writeBatch(db);
+                      batch.update(doc(colRef("inventory"), p.itemId), { stock: increment(-1), ...serverUpdate() });
+                      batch.set(doc(colRef("inventoryLog")), { ...p.logEntry, ...serverCreate() });
+                      return batch.commit();
+                    },
+  updateStudent:   (p) => updateDoc(doc(colRef("students"), p.id), { ...p.data, ...serverUpdate() }),
+  archiveStudent:  (p) => updateDoc(doc(colRef("students"), p.id), {
+                      isArchived: true,
+                      archivedReason: p.reason || "Sin motivo registrado",
+                      archivedAt: Date.now(),
+                      archivedBy: p.createdBy || authorStamp(),
+                      ...serverUpdate()
+                    }),
+  /* V41 — El borrado en duro de una ficha clínica queda retirado del sistema.
+     El tipo `deleteStudent` se conserva mapeado al archivado para que las
+     operaciones encoladas por V40 en dispositivos ya desplegados drenen de
+     forma segura en lugar de ejecutar la eliminación que ya no queremos. */
+  deleteStudent:   (p) => updateDoc(doc(colRef("students"), p.id), {
+                      isArchived: true,
+                      archivedReason: p.reason || "Archivada al migrar una operación pendiente de V40",
+                      archivedAt: Date.now(),
+                      archivedBy: p.createdBy || authorStamp(),
+                      ...serverUpdate()
+                    }),
+  confirmFamily:   (p) => updateDoc(doc(colRef("careRecords"), p.recordId), { family: "Confirmada", ...serverUpdate() })
 };
 
 function alreadyConverged(op){
@@ -257,12 +311,40 @@ async function seedIfNeeded(){
   if(!won) return;
   const base = Date.now();
   const batch = writeBatch(db);
-  (s.students||[]).forEach((st,i)=> batch.set(doc(colRef("students")), stripUndefined({...st, createdAt: base + i})));
-  (s.inventory||[]).forEach((it,i)=> batch.set(doc(colRef("inventory")), stripUndefined({...it, createdAt: base + i})));
-  (s.vaccines||[]).forEach((v,i)=> batch.set(doc(colRef("vaccines")), stripUndefined({...v, createdAt: base + i})));
-  (s.careRecords||[]).forEach((r,i)=> batch.set(doc(colRef("careRecords")), stripUndefined({...r, createdAt: base - i})));
-  (s.inventoryHistory||[]).forEach((h,i)=> batch.set(doc(colRef("inventoryLog")), {time:h[0]||"",name:h[1]||"",qty:h[2]||"",student:h[3]||"",context:h[4]||"",createdAt: base - i}));
+  const seedAuthor = { uid: "seed", email: null, role: "SuperAdmin" };
+  /* V41 — La siembra crea las fichas con refs explícitas para poder enlazar
+     las claves foráneas de atenciones, vacunas e inventoryLog. La demo deja
+     de depender de coincidencias por nombre. */
+  const idByName = {};
+  (s.students||[]).forEach((st,i)=>{
+    const ref = doc(colRef("students"));
+    idByName[st.fullName] = ref.id;
+    batch.set(ref, stripUndefined({...st, createdAt: base + i, createdBy: seedAuthor}));
+  });
+  const fk = (name) => idByName[name] || null;
+  (s.inventory||[]).forEach((it,i)=> batch.set(doc(colRef("inventory")), stripUndefined({...it, createdAt: base + i, createdBy: seedAuthor})));
+  (s.vaccines||[]).forEach((v,i)=> batch.set(doc(colRef("vaccines")), stripUndefined({...v, studentId: fk(v.student), studentName: v.student, createdAt: base + i, createdBy: seedAuthor})));
+  (s.careRecords||[]).forEach((r,i)=> batch.set(doc(colRef("careRecords")), stripUndefined({...r, studentId: fk(r.student), studentName: r.student, createdAt: base - i, createdBy: seedAuthor})));
+  (s.inventoryHistory||[]).forEach((h,i)=> batch.set(doc(colRef("inventoryLog")), {time:h[0]||"",name:h[1]||"",qty:h[2]||"",studentId:fk(h[3]),studentName:h[3]||"",context:h[4]||"",createdAt: base - i, createdBy: seedAuthor}));
   await batch.commit();
+}
+
+/* V41 — El caso demo se sembraba con el NOMBRE de Sofía pero sin studentId,
+   de modo que tras la migración a claves foráneas la demo mostraría
+   correctamente "Sin ficha enlazada". Este enlace se repara una sola vez
+   buscando la ficha sembrada. Solo aplica al tenant de ventas. */
+let demoLinkAttempted = false;
+async function linkDemoCaseOnce(){
+  if(SCHOOL_ID !== "eight-demo" || demoLinkAttempted) return;
+  demoLinkAttempted = true;
+  try{
+    const snap = await getDoc(caseRef());
+    if(snap.exists() && snap.data().studentId) return;
+    const qs = await getDocs(query(colRef("students"), orderBy("createdAt", "asc"), limit(50)));
+    let match = null;
+    qs.forEach(d => { const x = d.data(); if(!match && x && x.fullName === "Sofía Martínez") match = d.id; });
+    if(match) await setDoc(caseRef(), { studentId: match }, { merge: true });
+  }catch(err){ console.error("Enlace del caso demo:", err); }
 }
 
 const seedAlertsRef = () => doc(db, "schools", SCHOOL_ID, "meta", "seed-alerts");
@@ -277,10 +359,15 @@ async function seedAlertsIfNeeded(){
   if(!won) return;
   const base = Date.now();
   const batch = writeBatch(db);
+  const ids = {};
+  try{
+    const qs = await getDocs(query(colRef("students"), orderBy("createdAt","asc"), limit(50)));
+    qs.forEach(d => { const x = d.data(); if(x && x.fullName) ids[x.fullName] = d.id; });
+  }catch(e){ console.error("FK de alertas demo:", e); }
   [
     {studentName:"Mateo Ruiz", location:"Aula 2A", symptoms:"Golpe leve en recreo", priority:"Media", status:"attended", timeLabel:"09:50"},
     {studentName:"Valentina Pérez", location:"Aula 1C", symptoms:"Dolor de cabeza", priority:"Baja", status:"family_confirmed", timeLabel:"08:41"}
-  ].forEach((a,i)=> batch.set(doc(colRef("alerts")), {...a, createdAt: base - (i+1)}));
+  ].forEach((a,i)=> batch.set(doc(colRef("alerts")), {...a, studentId: ids[a.studentName] || null, createdAt: base - (i+1), createdBy: {uid:"seed", email:null, role:"SuperAdmin"}}));
   await batch.commit();
 }
 
@@ -379,11 +466,14 @@ function attachCollectionListeners(){
     }));
   };
   const asObj = d => { const x = d.data(); return (x && typeof x === "object") ? { id: d.id, ...x } : null; };
-  bind("students", "asc", d => { const o = asObj(d); if(o) o.fullName = String(o.fullName || "Estudiante sin nombre"); return o; }, true);
+  bind("students", "asc", d => { const o = asObj(d); if(o){ o.fullName = String(o.fullName || "Estudiante sin nombre"); o.isArchived = o.isArchived === true; } return o; }, true);
   bind("inventory", "asc", d => { const o = asObj(d); if(o){ o.name = String(o.name || "Ítem"); o.stock = Number.isFinite(Number(o.stock)) ? Number(o.stock) : 0; } return o; }, true);
-  bind("vaccines", "asc", asObj, false);
-  bind("careRecords", "desc", asObj, true);
-  bind("inventoryLog", "desc", d => { const x = d.data(); return [x.time||"", x.name||"", x.qty||"", x.student||"", x.context||""]; }, false);
+  bind("vaccines", "asc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; } return o; }, false);
+  /* V41 — `student` (nombre suelto) sobrevive en documentos anteriores a la
+     migración. Se normaliza en lectura a studentName para que la UI tenga un
+     único campo de presentación, sin reescribir el histórico. */
+  bind("careRecords", "desc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; } return o; }, true);
+  bind("inventoryLog", "desc", d => { const x = d.data() || {}; return { date:x.date||"", time:x.time||"", name:x.name||"", qty:x.qty||"", studentId:x.studentId||null, studentName:x.studentName||x.student||"", context:x.context||"" }; }, false);
   bind("alerts", "desc", d => ({ id: d.id, ...d.data() }), false);
 }
 
@@ -408,20 +498,31 @@ function cloudOp(type, payload, opId){
     throw err;
   });
 }
+/* V41 — `authored()` es el único camino por el que un dato clínico llega a
+   Firestore. No hay escritura sin autor: si algún día faltara, faltaría
+   también en el documento y la regla del servidor debe rechazarla. */
+function authored(payload, opId){
+  return stripUndefined({ ...payload, clientOpId: opId, createdAt: Date.now(), createdBy: authorStamp() });
+}
 window.novimedCloudAddStudent = (student, opId) =>
-  cloudOp("addStudent", stripUndefined({...student, clientOpId: opId, createdAt: Date.now()}), opId);
+  cloudOp("addStudent", authored(student, opId), opId);
 window.novimedCloudAddInventoryItem = (item, opId) =>
-  cloudOp("addInventoryItem", stripUndefined({...item, clientOpId: opId, createdAt: Date.now()}), opId);
+  cloudOp("addInventoryItem", authored(item, opId), opId);
 window.novimedCloudAddCareRecord = (record, opId) =>
-  cloudOp("addCareRecord", stripUndefined({...record, clientOpId: opId, createdAt: Date.now()}), opId);
+  cloudOp("addCareRecord", authored(record, opId), opId)
+    .then(ref => { if(ref && ref.id) linkedCareRecordId = ref.id; return ref; });
 window.novimedCloudUseInventory = (itemId, logEntry, opId) =>
-  cloudOp("invUse", { itemId, logEntry: {...logEntry, createdAt: Date.now()} }, opId);
+  cloudOp("invUse", { itemId, logEntry: authored(logEntry, opId) }, opId);
 window.novimedCloudConfirmFamily = (recordId, opId) =>
-  cloudOp("confirmFamily", { recordId }, opId);
+  cloudOp("confirmFamily", { recordId, createdBy: authorStamp() }, opId);
 window.novimedCloudUpdateStudent = (id, data, opId) =>
-  cloudOp("updateStudent", { id, data }, opId);
+  cloudOp("updateStudent", { id, data, createdBy: authorStamp() }, opId);
+window.novimedCloudArchiveStudent = (id, reason, opId) =>
+  cloudOp("archiveStudent", { id, reason, createdBy: authorStamp() }, opId);
+/* Retirada explícita: cualquier llamada superviviente al borrado en duro
+   se convierte en archivado en lugar de destruir evidencia clínica. */
 window.novimedCloudDeleteStudent = (id, opId) =>
-  cloudOp("deleteStudent", { id }, opId);
+  window.novimedCloudArchiveStudent(id, "Solicitud de eliminación convertida en archivado", opId);
 
 
 function currentTimeLabel(){
@@ -441,6 +542,7 @@ function safeRender(){
 let currentAlertDocId = null;
 function mapFirestoreToLocalState(data){
   if(data && data.alertId) currentAlertDocId = data.alertId;
+  if(data && data.careRecordId) linkedCareRecordId = data.careRecordId;
   const s = window.novimedState;
   if(!s || !data) return;
 
@@ -451,7 +553,10 @@ function mapFirestoreToLocalState(data){
   const studentName = data.studentName || (isDemoTenant ? "Sofía Martínez" : "Sin alertas activas");
   const location = data.location || (isDemoTenant ? "Aula 3B · 2° piso" : "El panel mostrará aquí la próxima alerta docente");
   const symptoms = data.symptoms || (isDemoTenant ? "Mareo, náuseas y dolor abdominal durante la clase." : "Todo en calma por ahora.");
-  s.currentAlert = {studentName, location, symptoms, allergy:data.allergy || (isDemoTenant ? "Maní" : "—"), alertTimeLabel:data.alertTimeLabel || (idleReal ? "" : "Ahora")};
+  /* V41 — `allergy` sale del modelo del caso: era un valor copiado (y en el
+     tenant demo, literal) que la UI mostraba como dato clínico verificado.
+     Ahora la UI lo deriva de la ficha por studentId, o declara su ausencia. */
+  s.currentAlert = {studentId:data.studentId || null, studentName, location, symptoms, alertTimeLabel:data.alertTimeLabel || (idleReal ? "" : "Ahora")};
   const familyRead = data.familyRead === true;
   const doctorNotified = data.doctorNotified === true;
   const careSaved = doctorNotified || status === "in_observation" || status === "attended" || status === "family_confirmed";
@@ -482,7 +587,7 @@ function mapFirestoreToLocalState(data){
       data.attentionTimeLabel || "Ahora",
       "green",
       "Ficha médica consultada",
-      "Alergia registrada: " + (data.allergy || "Maní")
+      data.studentId ? "Antecedentes verificados en la ficha" : "Sin ficha enlazada — verificación manual"
     ]);
   }
 
@@ -526,28 +631,30 @@ function mapFirestoreToLocalState(data){
 
 function neutralCasePayload(){
   return {
+    studentId: null,
     studentName: "",
     status: "idle",
-    allergy: "",
+    careRecordId: null,
     familyRead: false,
     doctorNotified: false,
     priority: "none",
     location: "",
     symptoms: "",
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    updatedBy: authorStamp()
   };
 }
 async function ensureCaseExists(){
   const payload = SCHOOL_ID === "eight-demo" ? {
     studentName: "Sofía Martínez",
     status: "alert_pending",
-    allergy: "Maní",
     familyRead: false,
     doctorNotified: false,
     priority: "high",
     location: "Aula 3B · 2° piso",
     symptoms: "Mareo, náuseas y dolor abdominal durante la clase.",
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    updatedBy: authorStamp()
   } : neutralCasePayload();
   await setDoc(caseRef(), payload, { merge: true });
 }
@@ -570,36 +677,45 @@ function cleanDemoLeakOnce(){
 window.submitTeacherAlert = async function(){
   if(window.novimedCanWrite && !window.novimedCanWrite()){ uiNotify("Solo lectura","Tu rol (Consulta) permite revisar la información, no modificarla."); return; }
   const cloudSessionReady = !!SCHOOL_ID;
-  const student = (document.getElementById("reportStudent")?.value || "Estudiante sin nombre").trim();
-  const location = (document.getElementById("reportRoom")?.value || "Ubicación sin registrar").trim();
-  const symptoms = (document.getElementById("reportSymptoms")?.value || "Síntomas sin especificar").trim();
+  /* V41 — Un solo contrato de lectura del formulario (core.js). La alerta
+     viaja con studentId; `allergy` desaparece del modelo: las alergias se
+     derivan de la ficha en tiempo de render, nunca se copian a la alerta. */
+  const form = window.novimedReadAlertForm ? window.novimedReadAlertForm() : null;
+  if(!form || !form.valid) { window.novimedSubmitTeacherAlertLocal?.(); return; }
 
   window.novimedSubmitTeacherAlertLocal?.();
   if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{
     const alertRef = await addDoc(colRef("alerts"), {
-      studentName: student,
-      location,
-      symptoms,
+      studentId: form.studentId,
+      studentName: form.studentName,
+      studentUnlinked: !form.studentId,
+      location: form.location,
+      symptoms: form.symptoms,
       priority: "Alta",
       status: "pending",
       timeLabel: currentTimeLabel(),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      createdBy: authorStamp(),
+      ...serverCreate()
     });
     currentAlertDocId = alertRef.id;
+    linkedCareRecordId = null;
     await setDoc(caseRef(), {
-      studentName: student,
+      studentId: form.studentId,
+      studentName: form.studentName,
       status: "alert_pending",
-      allergy: SCHOOL_ID === "eight-demo" ? "Maní" : "—",
       familyRead: false,
       doctorNotified: false,
       priority: "high",
-      location,
-      symptoms,
+      location: form.location,
+      symptoms: form.symptoms,
       alertId: alertRef.id,
+      careRecordId: null,
       alertTimeLabel: currentTimeLabel(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      updatedBy: authorStamp()
     }, { merge: true });
   }catch(error){
     console.error("Error al sincronizar alerta en Firebase. Se mantiene el registro local:", error);
@@ -615,7 +731,9 @@ window.submitCare = async function(){
   const careNote = document.getElementById("careObservations")?.value || document.getElementById("careActionDone")?.value || "Atención médica registrada y familia notificada.";
   let selectedStudentIndex = parseInt(document.getElementById("careStudent")?.value || window.novimedState?.selectedStudentIndex || 0, 10);
   if(!Number.isFinite(selectedStudentIndex) || selectedStudentIndex < 0) selectedStudentIndex = 0;
-  const selectedStudent = window.novimedState?.students?.[selectedStudentIndex]?.fullName || "Estudiante sin nombre";
+  const studentDoc = window.novimedState?.students?.[selectedStudentIndex] || null;
+  const selectedStudent = studentDoc?.fullName || "Estudiante sin nombre";
+  const selectedStudentId = studentDoc?.id || null;
   const bodyArea = document.getElementById("careBodyArea")?.value || "Sin especificar";
   const symptoms = document.getElementById("careSymptoms")?.value || "Sin especificar";
   const presumptiveDiagnosis = document.getElementById("carePresumptiveDiagnosis")?.value || "Sin especificar";
@@ -629,7 +747,12 @@ window.submitCare = async function(){
       status: "in_observation",
       doctorNotified: true,
       familyRead: false,
+      studentId: selectedStudentId,
       studentName: selectedStudent,
+      /* V41 — el caso enlaza la atención concreta: confirmFamilyRead deja de
+         escribir sobre "el registro más reciente" y pasa a resolver por id. */
+      careRecordId: linkedCareRecordId || null,
+      updatedBy: authorStamp(),
       careStatus,
       eva,
       careNote,
@@ -645,7 +768,10 @@ window.submitCare = async function(){
       updateDoc(doc(colRef("alerts"), currentAlertDocId), {
         status: "attended",
         attendedAt: Date.now(),
-        attendedTimeLabel: currentTimeLabel()
+        attendedTimeLabel: currentTimeLabel(),
+        careRecordId: linkedCareRecordId || null,
+        attendedBy: authorStamp(),
+        ...serverUpdate()
       }).catch(err => console.error("Alerta→atendida:", err));
     }
   }catch(error){
@@ -664,14 +790,17 @@ window.confirmFamilyRead = async function(){
       familyRead: true,
       status: "family_confirmed",
       familyReadTimeLabel: currentTimeLabel(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      updatedBy: authorStamp()
     });
     const linkedAlertFR=(window.novimedState?.alerts||[]).find(a=>a&&a.id===currentAlertDocId);
     if(currentAlertDocId && (!linkedAlertFR || linkedAlertFR.status!=="family_confirmed")){
       updateDoc(doc(colRef("alerts"), currentAlertDocId), {
         status: "family_confirmed",
         familyConfirmedAt: Date.now(),
-        familyReadTimeLabel: currentTimeLabel()
+        familyReadTimeLabel: currentTimeLabel(),
+        familyConfirmedBy: authorStamp(),
+        ...serverUpdate()
       }).catch(err => console.error("Alerta→cerrada:", err));
     }
   }catch(error){
@@ -775,6 +904,8 @@ onAuthStateChanged(auth, async (user) => {
   if(!user){
     currentUid = null;
     SCHOOL_ID = null;
+    setIdentity(null);
+    linkedCareRecordId = null;
     teardownListeners();
     window.novimedSyncStatus = "Sesión cerrada";
     gateBusy(false); gateError("");
@@ -800,6 +931,9 @@ onAuthStateChanged(auth, async (user) => {
 
   SCHOOL_ID = user.isAnonymous ? "eight-demo" : String(claims.schoolId);
   const role = user.isAnonymous ? "Demo" : String(claims.role || "Consulta");
+  /* V41 — La identidad debe quedar fijada ANTES de que cualquier escritura
+     pueda ocurrir: authorStamp() se lee en cada payload de nube. */
+  setIdentity(user, role, SCHOOL_ID);
   window.novimedSchoolLabel = SCHOOL_ID;
   window.novimedSyncStatus = "Conectando…";
 
@@ -819,6 +953,7 @@ onAuthStateChanged(auth, async (user) => {
     .catch(error => console.error("Seed alerts:", error))
     .finally(() => {
       attachCollectionListeners();
+      linkDemoCaseOnce();
       window.novimedCloudReady = true;
     });
 });

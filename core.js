@@ -4,7 +4,7 @@ const state={
   careSaved:false,
   familyRead:false,
   selectedStudentIndex:0,
-  currentAlert:{studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',allergy:'Maní',alertTimeLabel:'10:24'},
+  currentAlert:{studentId:null,studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',alertTimeLabel:'10:24'},
   students:[
     {fullName:'Sofía Martínez',birthDate:'',age:'15 años',sex:'Femenino',course:'3° Secundaria · Aula 3B',address:'',phone:'+593 99 000 0000',email:'',contacts:[{name:'Ana Martínez',relation:'Madre',phone:'+593 99 000 0000'}],allergies:'Maní',chronic:'',medicines:'',restrictions:'Evitar consumo de maní y derivados.',medicalNotes:'Alergia alimentaria registrada. Requiere notificación familiar ante cualquier síntoma compatible.',insurance:'',vaccineStatus:'Pendiente de verificación',medicationAuth:'Sin registrar',emergencyTransfer:'Sin registrar'},
     {fullName:'Mateo Ruiz',birthDate:'',age:'9 años',sex:'Masculino',course:'5° Básica · Aula 5A',address:'',phone:'',email:'',contacts:[],allergies:'',chronic:'Asma leve',medicines:'',restrictions:'Seguimiento preventivo en actividad física intensa.',medicalNotes:'',insurance:'',vaccineStatus:'Al día',medicationAuth:'Sin registrar',emergencyTransfer:'Sin registrar'},
@@ -49,7 +49,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V40';
+const NOVIMED_VERSION='V41';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -97,12 +97,12 @@ function downloadCSV(name,rows){
 }
 function exportCareCSV(){
   const rows=[['Fecha','Hora','Estudiante','Área','EVA','Síntomas','Diagnóstico presuntivo','Acción','Medicamento','Derivación','Familia']]
-    .concat((state.careRecords||[]).map(r=>[r.date,r.time,r.student,r.bodyArea,r.eva,r.symptoms,r.presumptiveDiagnosis,r.actionDone,r.medication,r.derivation,r.family]));
+    .concat((state.careRecords||[]).map(r=>[r.date,r.time,recordStudentName(r),r.bodyArea,r.eva,r.symptoms,r.presumptiveDiagnosis,r.actionDone,r.medication,r.derivation,r.family]));
   downloadCSV('novimed_atenciones.csv',rows);
 }
 function exportStudentsCSV(){
-  const rows=[['Nombre','Edad','Curso','Alergias','Condiciones crónicas','Medicación','Vacunación','Teléfono','Correo']]
-    .concat((state.students||[]).map(s=>[s.fullName,s.age,s.course,s.allergies,s.chronic,s.medicines,s.vaccineStatus,s.phone,s.email]));
+  const rows=[['Nombre','Edad','Curso','Alergias','Condiciones crónicas','Medicación','Vacunación','Teléfono','Correo','Estado']]
+    .concat((state.students||[]).map(s=>[s.fullName,s.age,s.course,s.allergies,s.chronic,s.medicines,s.vaccineStatus,s.phone,s.email,s.isArchived?'Archivada · '+(s.archivedReason||''):'Activa']));
   downloadCSV('novimed_estudiantes.csv',rows);
 }
 
@@ -168,6 +168,7 @@ let currentSession={role:'Demo',email:null,anonymous:true,schoolId:null};
 function sessionRole(){return currentSession.role}
 function canWrite(){return sessionRole()!=='Consulta'}
 window.novimedCanWrite=canWrite;
+window.novimedStudentById=studentById;
 function guardWrite(){
   if(canWrite())return true;
   showToast('Solo lectura','Tu rol (Consulta) permite revisar la información, no modificarla.');
@@ -190,7 +191,7 @@ window.novimedActivateTenant=function(schoolId,session){
     state.students=[];state.inventory=[];state.inventoryHistory=[];
     state.careRecords=[];state.vaccines=[];state.riskProfiles=[];
     state.activities=[['Ahora','blue','Sesión iniciada','Institución: '+schoolId]];
-    state.currentAlert={studentName:'Sin alertas activas',location:'El panel mostrará aquí la próxima alerta docente',symptoms:'Todo en calma por ahora.',allergy:'—',alertTimeLabel:''};
+    state.currentAlert={...NEUTRAL_ALERT};
     state.alertSent=false;
   }
   state.alerts=undefined;
@@ -212,7 +213,25 @@ window.novimedActivateTenant=function(schoolId,session){
   renderAll();
 };
 function showToast(t,txt){el('toastTitle').textContent=t;el('toastText').textContent=txt;el('toast').classList.add('show');setTimeout(()=>el('toast').classList.remove('show'),2800)}
-function activeAlert(){return state.currentAlert||{studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',allergy:'Maní',alertTimeLabel:'10:24'}}
+/* V40.1 — El fallback de activeAlert() devolvía el caso demo (Sofía/maní).
+   Un valor por defecto en un campo clínico es información falsa presentada
+   como verificada: el fallback ahora declara ausencia, no inventa un caso. */
+const NEUTRAL_ALERT={studentId:null,studentName:'Sin alertas activas',location:'El panel mostrará aquí la próxima alerta docente',symptoms:'Todo en calma por ahora.',alertTimeLabel:''};
+function activeAlert(){return state.currentAlert||NEUTRAL_ALERT}
+
+/* ============================================================
+   V41 — RESOLUCIÓN POR CLAVE FORÁNEA
+   studentId es la clave real. studentName se conserva desnormalizado
+   solo para poder mostrar el registro cuando la ficha fue archivada,
+   renombrada o aún no sincronizó. Nunca se usa para enlazar.
+   ============================================================ */
+function studentById(id){
+  if(!id)return null;
+  return (state.students||[]).find(s=>s&&s.id===id)||null;
+}
+function activeStudents(){return (state.students||[]).filter(s=>s&&!s.isArchived)}
+function recordStudentName(r){return (r&&(r.studentName||r.student))||'Sin especificar'}
+function studentIndexById(id){return (state.students||[]).findIndex(s=>s&&s.id===id)}
 function showPage(page){const targetPage=el('page-'+page);if(!targetPage)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));targetPage.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>{const isActive=b.dataset.page===page;b.classList.toggle('active',isActive);if(isActive){b.setAttribute('aria-current','page')}else{b.removeAttribute('aria-current')}});const titles={inicio:['Centro de bienestar institucional','Respuesta médica escolar, familias conectadas y trazabilidad en tiempo real.'],roles:['Roles funcionales','Docente, médico, familia y directivo conectados.'],alertas:['Centro de alertas','Priorización de emergencias escolares.'],estudiantes:['Estudiantes','Fichas médicas y antecedentes relevantes.'],atenciones:['Registro médico escolar','Atenciones clínicas escolares documentadas.'],riesgo:['Priorización de riesgo','Priorización operativa basada en alertas, antecedentes y seguimiento.'],vacunas:['Control de vacunas','Registro y seguimiento según esquema nacional MSP.'],familias:['Familias','Notificaciones y confirmaciones de lectura.'],reportes:['Reportes','Indicadores para decisiones directivas.'],inventario:['Medicamentos disponibles','Stock, caducidad, reposición e historial de uso.'],config:['Configuración','Roles, notificaciones y catálogos clínicos.']};const t=titles[page]||['Novimed','Centro de bienestar institucional.'];el('pageTitle').textContent=t[0];el('pageSub').textContent=t[1];forceFullRender=true;renderAll()}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 function setRole(role){state.role=role;const d=roleData[role];el('sidebarAvatar').textContent=d[0];el('sidebarName').textContent=d[1];el('sidebarRole').textContent=d[2];document.querySelectorAll('.role-btn').forEach(b=>b.classList.toggle('active',b.dataset.role===role));document.querySelectorAll('.role-dashboard').forEach(x=>x.classList.remove('active'));const pane=el('role-'+role);if(pane)pane.classList.add('active');forceFullRender=true;showToast('Vista cambiada',d[1]+' ahora está usando Novimed.');renderAll()}
@@ -239,28 +258,102 @@ function shouldRender(name){
   return false;
 }
 const DOT_COLORS={red:'red',blue:'blue',green:'green',amber:'amber'};
+/* V40.1 — El aviso de alergias del incidente era HTML estático
+   ("Alergia conocida: maní") que ningún render tocaba: en cualquier
+   institución real afirmaba alergia al maní para cualquier estudiante.
+   Ahora deriva SIEMPRE de la ficha enlazada por studentId, y la ausencia
+   de ficha se declara de forma explícita en lugar de rellenarse. */
+function renderMainAllergyNote(){
+  const node=el('mainAllergyNote');
+  if(!node)return;
+  const alert=activeAlert();
+  const student=studentById(alert.studentId);
+  node.classList.remove('unlinked','critical','clear');
+  if(!alert.studentId||!student){
+    node.classList.add('unlinked');
+    node.textContent=alert.studentId?'Ficha no disponible en este dispositivo — verificar manualmente':'Sin ficha enlazada — verificar manualmente';
+    return;
+  }
+  const critical=[
+    student.allergies&&'Alergias: '+student.allergies,
+    student.chronic&&'Condiciones crónicas: '+student.chronic,
+    student.restrictions&&'Restricciones: '+student.restrictions
+  ].filter(Boolean).join(' · ');
+  if(critical){node.classList.add('critical');node.textContent=critical;}
+  else{node.classList.add('clear');node.textContent='Ficha enlazada · sin alergias ni condiciones registradas';}
+}
 function renderFeed(){el('activityFeed').innerHTML=state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}
 function alertStatusLabel(st){return st==='pending'?'Pendiente':(st==='attended'?'Atendida':(st==='family_confirmed'?'Cerrada':(st||'—')))}
 function renderAlerts(){
-  let rows;
+  const badge=el('alertsActiveBadge');
+  let rows=[];
   if(Array.isArray(state.alerts)){
-    rows=state.alerts.map(a=>[a.timeLabel||'—',a.studentName||'Estudiante sin nombre',a.priority||'Alta',alertStatusLabel(a.status)]);
-    if(!rows.length)rows=[['—','Sin alertas registradas','—','—']];
-  }else{
-    const c=activeAlert();
-    rows=[[c.alertTimeLabel||'Ahora',c.studentName||'Estudiante sin nombre','Alta',state.careSaved?'Atendida':'Pendiente'],['09:50','Mateo Ruiz','Media','En seguimiento'],['08:41','Valentina Pérez','Baja','Cerrada']];
-  }
-  const alertRows=rows.map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${escapeHtml(r[1])}</td><td>${escapeHtml(r[2])}</td><td>${escapeHtml(r[3])}</td><td><button type="button" class="btn secondary" onclick="openFichaModal()">Revisar</button></td></tr>`);
-  const alertPg=pagedRows(alertRows,'alerts');
-  el('alertsTable').innerHTML='<tr><th scope="col">Hora</th><th scope="col">Estudiante</th><th scope="col">Prioridad</th><th scope="col">Estado</th><th scope="col">Acción</th></tr>'+alertPg.rows.join('')+pagerRow(5,'alerts',alertPg.extra)}
+    rows=state.alerts.map(a=>{
+      const linked=!!a.studentId&&!!studentById(a.studentId);
+      const name=escapeHtml(a.studentName||'Estudiante sin nombre');
+      const nameCell=linked?name:name+'<br><span style="color:#b45309;font-size:12px">Sin ficha enlazada</span>';
+      const action=linked
+        ? `<button type="button" class="btn secondary" onclick="openFichaModalById('${escapeHtml(a.studentId)}')">Ver ficha</button>`
+        : `<button type="button" class="btn secondary" disabled title="Esta alerta no está enlazada a una ficha">Sin ficha</button>`;
+      return `<tr><td>${escapeHtml(a.timeLabel||'—')}</td><td>${nameCell}</td><td>${escapeHtml(a.priority||'Sin prioridad')}</td><td>${escapeHtml(alertStatusLabel(a.status))}</td><td>${action}</td></tr>`;
+    });
+    if(badge){
+      const pend=state.alerts.filter(a=>a&&a.status==='pending').length;
+      badge.textContent=pend===0?'sin alertas activas':(pend===1?'1 activa':pend+' activas');
+      badge.className='badge '+(pend?'red':'green');
+    }
+  }else if(badge){badge.textContent='—';badge.className='badge blue';}
+  const alertPg=pagedRows(rows,'alerts');
+  el('alertsTable').innerHTML='<tr><th scope="col">Hora</th><th scope="col">Estudiante</th><th scope="col">Prioridad</th><th scope="col">Estado</th><th scope="col">Acción</th></tr>'
+    +(rows.length?alertPg.rows.join('')+pagerRow(5,'alerts',alertPg.extra):emptyRow(5,'Sin alertas registradas.'));
+}
 function renderCare(){
-  const rows=(state.careRecords||[]).map(r=>`<tr><td>${escapeHtml(r.date||'Sin registrar')}</td><td>${escapeHtml(r.time||'Sin registrar')}</td><td>${escapeHtml(r.student||'Sin especificar')}</td><td>${escapeHtml(r.bodyArea||'Sin especificar')}</td><td>${escapeHtml(r.eva||'Sin especificar')}</td><td>${escapeHtml(r.symptoms||'Sin especificar')}</td><td>${escapeHtml(r.presumptiveDiagnosis||'Sin especificar')}</td><td>${escapeHtml(r.actionDone||'Sin especificar')}</td><td>${escapeHtml(r.medication||'Sin especificar')}</td><td>${escapeHtml(r.derivation||'Sin especificar')}</td><td>${escapeHtml(r.family||'Pendiente')}</td></tr>`).join('');
+  const rows=(state.careRecords||[]).map(r=>`<tr><td>${escapeHtml(r.date||'Sin registrar')}</td><td>${escapeHtml(r.time||'Sin registrar')}</td><td>${escapeHtml(recordStudentName(r))}${r.studentId?'':'<br><span style="color:#b45309;font-size:12px">Sin ficha enlazada</span>'}</td><td>${escapeHtml(r.bodyArea||'Sin especificar')}</td><td>${escapeHtml(r.eva||'Sin especificar')}</td><td>${escapeHtml(r.symptoms||'Sin especificar')}</td><td>${escapeHtml(r.presumptiveDiagnosis||'Sin especificar')}</td><td>${escapeHtml(r.actionDone||'Sin especificar')}</td><td>${escapeHtml(r.medication||'Sin especificar')}</td><td>${escapeHtml(r.derivation||'Sin especificar')}</td><td>${escapeHtml(r.family||'Pendiente')}</td></tr>`).join('');
   const careAll=(state.careRecords||[]).length?rows.split('</tr>').filter(x=>x.trim()).map(x=>x+'</tr>'):[];
   const carePg=pagedRows(careAll,'care');
   el('careTable').innerHTML='<tr><th scope="col">Fecha</th><th scope="col">Hora</th><th scope="col">Estudiante</th><th scope="col">Área</th><th scope="col">EVA</th><th scope="col">Síntomas</th><th scope="col">Diagnóstico presuntivo</th><th scope="col">Acción realizada</th><th scope="col">Medicamento</th><th scope="col">Derivación</th><th scope="col">Familia</th></tr>'
     +(careAll.length?carePg.rows.join('')+pagerRow(11,'care',carePg.extra):emptyRow(11,'Sin atenciones registradas todavía.'));
 }
-function renderFamily(){const status=state.familyRead?'Confirmación recibida':'Pendiente de lectura';el('familyNotices').innerHTML=`<div class="flow-step"><div class="flow-num">1</div><div><b>Ana Martínez</b><p>Sofía fue atendida por mareo y dolor abdominal. Estado: en observación.</p><div class="chipline" style="margin-top:8px"><span class="chip ${state.familyRead?'green':'red'}">${status}</span></div></div></div><div class="actions" style="margin-top:14px"><button type="button" class="btn primary" onclick="confirmFamilyRead()">Simular confirmación familiar</button></div>`;el('phoneScreen').innerHTML=`<div class="screen-top"><div><h4>Novimed</h4><span class="mini">App para familias</span></div><span class="mini">9:41</span></div><div class="parent-card"><b>Hola, Ana</b><span>Madre de Sofía Martínez</span></div><div class="notif-mobile"><b>Atención en enfermería</b><p>Sofía fue atendida por mareo y dolor abdominal. Estado actual: en observación.</p></div><div class="confirm"><b>${state.familyRead?'Confirmación enviada':'Confirmación pendiente'}</b><p>${state.familyRead?'La institución ya registró tu lectura.':'Presiona confirmar para registrar que recibiste la información.'}</p></div><button type="button" class="btn primary" style="width:100%;margin-top:14px" onclick="confirmFamilyRead()">Confirmar lectura</button><div class="bottom-nav"><span>Inicio</span><span>Alertas</span><span>Historial</span></div>`}
+/* V40.1 — El módulo Familias mostraba "Ana Martínez"/"Sofía" fijos en
+   cualquier institución y ofrecía "Simular confirmación familiar" como si
+   fuera un hecho registrado. No existe canal familiar: lo que el sistema
+   sabe con certeza es que la notificación quedó REGISTRADA. La confirmación
+   de lectura solo puede simularse dentro del tenant de ventas, y así se rotula. */
+function renderFamily(){
+  const box=el('familyNotices');
+  if(!box)return;
+  const alert=activeAlert();
+  const student=studentById(alert.studentId);
+  const hasCase=!!(state.currentAlert&&alert.studentId);
+  const contacts=(student&&student.contacts||[]).filter(c=>c&&(c.name||c.phone));
+  const demo=isDemoTenant();
+
+  if(!hasCase&&!demo){
+    box.innerHTML='<p style="color:#71819b;font-size:13px;line-height:1.5">Cuando se registre una atención sobre una ficha enlazada, aquí aparecerán los contactos de emergencia y el estado de la notificación.</p>';
+  }else{
+    const who=contacts.length
+      ? contacts.map(c=>`<b>${escapeHtml(c.name||'Contacto sin nombre')}</b> <span style="color:#71819b">${escapeHtml(c.relation||'')} ${escapeHtml(c.phone||'')}</span>`).join('<br>')
+      : '<b>Sin contactos de emergencia registrados en la ficha</b>';
+    const readState=state.familyRead
+      ? '<span class="chip green">Lectura confirmada</span>'
+      : '<span class="chip amber">Notificación registrada · lectura no confirmada</span>';
+    box.innerHTML=`<div class="flow-step"><div class="flow-num">1</div><div>${who}
+      <p style="margin-top:6px">Estudiante: ${escapeHtml(alert.studentName||'Sin especificar')}</p>
+      <div class="chipline" style="margin-top:8px">${readState}</div></div></div>
+      <p class="field-hint" style="margin-top:14px">Novimed registra que la notificación fue emitida. La confirmación de lectura por parte de la familia requiere el canal familiar, no disponible en esta versión.</p>
+      ${demo?'<div class="actions" style="margin-top:14px"><button type="button" class="btn secondary" onclick="confirmFamilyRead()">Simular confirmación (solo demo)</button></div>':''}`;
+  }
+
+  const screen=el('phoneScreen');
+  if(!screen)return;
+  if(!demo){
+    screen.innerHTML='<div class="screen-top"><div><h4>Novimed</h4><span class="mini">App para familias</span></div></div><div class="parent-card"><b>Canal familiar</b><span>No disponible en esta versión</span></div><p style="margin-top:14px;font-size:12px;color:#71819b;line-height:1.5">Esta vista es una maqueta del producto previsto. Ninguna familia recibe notificaciones desde Novimed todavía.</p>';
+    return;
+  }
+  const demoName=escapeHtml(alert.studentName||'el estudiante');
+  screen.innerHTML=`<div class="screen-top"><div><h4>Novimed</h4><span class="mini">App para familias · demo</span></div></div><div class="parent-card"><b>Vista de demostración</b><span>Representante de ${demoName}</span></div><div class="notif-mobile"><b>Atención en enfermería</b><p>${demoName} fue atendido/a. Estado actual: en observación.</p></div><div class="confirm"><b>${state.familyRead?'Confirmación enviada':'Confirmación pendiente'}</b><p>${state.familyRead?'La institución ya registró la lectura.':'Maqueta: en producción este botón vive en el dispositivo de la familia.'}</p></div><button type="button" class="btn primary" style="width:100%;margin-top:14px" onclick="confirmFamilyRead()">Confirmar lectura (demo)</button><div class="bottom-nav"><span>Inicio</span><span>Alertas</span><span>Historial</span></div>`;
+}
+
 
 
 
@@ -290,13 +383,34 @@ function conditionSummary(student){
   if(student.restrictions) parts.push('Restricción escolar registrada');
   return parts.join(' · ') || 'Sin alertas críticas';
 }
+let showArchivedStudents=false;
+function toggleArchivedStudents(){
+  showArchivedStudents=!showArchivedStudents;
+  const b=el('toggleArchivedBtn');
+  if(b)b.textContent=showArchivedStudents?'Ocultar archivadas':'Mostrar archivadas';
+  forceFullRender=true;renderAll();
+}
 function renderStudents(){
   const table=el('studentsTable');
   if(!table) return;
-  const all=state.students.map((s,index)=>`<tr><td>${escapeHtml(valueOrDash(s.fullName))}<br><span style="color:#71819b;font-size:12px">${escapeHtml(valueOrDash(s.age))}</span></td><td>${escapeHtml(valueOrDash(s.course))}</td><td>${escapeHtml(conditionSummary(s))}</td><td>${escapeHtml(valueOrDash(s.vaccineStatus))}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn secondary" onclick="openFichaModal(${index})">Ver ficha</button><button type="button" class="btn secondary" onclick="openEditStudentModal(${index})">Editar</button><button type="button" class="btn secondary" onclick="deleteStudent(${index})">Eliminar</button></div></td></tr>`);
+  /* El índice original se conserva ANTES de filtrar: los handlers siguen
+     apuntando a la posición real en state.students. */
+  const visible=(state.students||[]).map((s,index)=>({s,index}))
+    .filter(x=>showArchivedStudents?true:!x.s.isArchived);
+  const all=visible.map(({s,index})=>{
+    const archived=!!s.isArchived;
+    const actions=archived
+      ? `<button type="button" class="btn secondary" onclick="openFichaModal(${index})">Ver ficha</button>`
+      : `<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn secondary" onclick="openFichaModal(${index})">Ver ficha</button><button type="button" class="btn secondary" onclick="openEditStudentModal(${index})">Editar</button><button type="button" class="btn secondary" onclick="archiveStudent(${index})">Archivar</button></div>`;
+    const nameCell=escapeHtml(valueOrDash(s.fullName))
+      +(archived?' <span class="chip amber">Archivada</span>':'')
+      +`<br><span style="color:#71819b;font-size:12px">${escapeHtml(valueOrDash(s.age))}</span>`
+      +(archived&&s.archivedReason?`<br><span style="color:#71819b;font-size:12px">Motivo: ${escapeHtml(s.archivedReason)}</span>`:'');
+    return `<tr class="${archived?'row-archived':''}"><td>${nameCell}</td><td>${escapeHtml(valueOrDash(s.course))}</td><td>${escapeHtml(conditionSummary(s))}</td><td>${escapeHtml(valueOrDash(s.vaccineStatus))}</td><td>${actions}</td></tr>`;
+  });
   const pg=pagedRows(all,'students');
   table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Curso</th><th scope="col">Condición registrada</th><th scope="col">Vacunación</th><th scope="col">Acción</th></tr>'
-    +(all.length?pg.rows.join('')+pagerRow(5,'students',pg.extra):emptyRow(5,'Aún no hay estudiantes registrados. Crea la primera ficha con el botón superior.'));
+    +(all.length?pg.rows.join('')+pagerRow(5,'students',pg.extra):emptyRow(5,showArchivedStudents?'No hay fichas registradas.':'Aún no hay fichas activas. Crea la primera con el botón superior.'));
 }
 function fillStudentForm(s){
   const set=(id,v)=>{const n=el(id);if(n)n.value=v||'';};
@@ -316,22 +430,38 @@ function openEditStudentModal(index){
   fillStudentForm(s);
   const t=el('studentModalTitle');if(t)t.textContent='Editar ficha médica estudiantil';
 }
-function deleteStudent(index){
+/* V41 — El borrado en duro de la ficha médica de un menor tras un
+   window.confirm() destruía evidencia clínica y huerfanaba las atenciones
+   asociadas. Se sustituye por archivado lógico con motivo obligatorio y
+   autoría registrada. La eliminación real debe quedar prohibida también
+   en las reglas de Firestore (allow delete: if false). */
+function archiveStudent(index){
   if(!guardWrite())return;
   const s=state.students[index];
   if(!s)return;
+  if(s.isArchived){showToast('Ya archivada','Esta ficha ya está archivada.');return;}
   const name=s.fullName||'este estudiante';
-  if(!window.confirm('¿Eliminar la ficha de '+name+'? Sus atenciones históricas se conservarán en el registro clínico.'))return;
-  if(window.novimedCloudReady && s.id && window.novimedCloudDeleteStudent){
-    window.novimedCloudDeleteStudent(s.id).catch(err=>{
-      console.error('Eliminación a nube:',err);
-      showToast('Aviso','La nube rechazó la eliminación ('+(err.code||'error')+'). Puede reaparecer al sincronizar.');
+  const raw=window.prompt('Archivar la ficha de '+name+'.\n\nLa ficha deja de estar activa pero se conserva íntegra junto con su historial clínico.\n\nMotivo (obligatorio):','');
+  if(raw===null)return;
+  const reason=String(raw).replace(/[\u0000-\u001F]/g,'').trim().slice(0,300);
+  if(!reason){showToast('Motivo requerido','Archivar una ficha clínica exige un motivo registrado.');return;}
+  const meta={isArchived:true,archivedAt:Date.now(),archivedReason:reason};
+  if(window.novimedCloudReady && s.id && window.novimedCloudArchiveStudent){
+    window.novimedCloudArchiveStudent(s.id,reason).catch(err=>{
+      console.error('Archivado a nube:',err);
+      showToast('Archivado local','El archivado no llegó a la nube ('+(err.code||'error')+'). Se reintentará automáticamente.');
     });
   }
-  state.students.splice(index,1);
-  if(state.selectedStudentIndex>=state.students.length)state.selectedStudentIndex=0;
-  showToast('Ficha eliminada','La ficha de '+name+' fue eliminada. Atenciones históricas conservadas.');
+  state.students[index]={...s,...meta};
+  if(state.selectedStudentIndex===index)state.selectedStudentIndex=0;
+  showToast('Ficha archivada','La ficha de '+name+' quedó archivada. Su historial clínico se conserva.');
+  forceFullRender=true;
   renderAll();
+}
+function openFichaModalById(studentId){
+  const idx=studentIndexById(studentId);
+  if(idx<0){showToast('Ficha no disponible','Este registro no está enlazado a una ficha en este dispositivo.');return;}
+  openFichaModal(idx);
 }
 function openStudentModal(){
   if(!guardWrite())return;
@@ -546,25 +676,31 @@ function renderInventory(){
     const reorder=item.stock<=item.min?'Solicitar reposición':'Stock suficiente';
     return `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.category)}</td><td>${item.stock} unidades</td><td>${item.min} unidades</td><td>${escapeHtml(item.expires||'Sin registrar')}</td><td><span class="chip ${st[0]}">${reorder}</span></td><td><button type="button" class="btn secondary" onclick="registerInventoryUse(${index})">Registrar uso</button></td></tr>`;
   }).join('');
-  history.innerHTML=state.inventoryHistory.map(h=>`<div class="flow-step"><div class="flow-num">${escapeHtml(h[0])}</div><div><b>${escapeHtml(h[1])} · ${escapeHtml(h[2])}</b><p>${escapeHtml(h[3])} — ${escapeHtml(h[4])}</p></div></div>`).join('');
+  /* V41 — El log pasó de array posicional a objeto con studentId y fecha.
+     Los registros anteriores siguen llegando como array: se normalizan aquí. */
+  history.innerHTML=(state.inventoryHistory||[]).map(h=>{
+    const e=Array.isArray(h)?{time:h[0],name:h[1],qty:h[2],studentName:h[3],context:h[4],date:''}:(h||{});
+    const when=(e.date?e.date+' ':'')+(e.time||'');
+    return `<div class="flow-step"><div class="flow-num">${escapeHtml(e.time||'—')}</div><div><b>${escapeHtml(e.name||'—')} · ${escapeHtml(e.qty||'')}</b><p>${escapeHtml(e.studentName||'Registro interno')} — ${escapeHtml(e.context||'')}${when?' · '+escapeHtml(when):''}</p></div></div>`;
+  }).join('')||'<p style="color:#71819b;font-size:13px">Sin movimientos registrados.</p>';
 }
-function registerInventoryUse(index, contextStudent='Registro interno', contextReason='Uso documentado desde inventario', notify=true){
+function registerInventoryUse(index, contextStudent='Registro interno', contextReason='Uso documentado desde inventario', notify=true, studentId=null){
   if(!guardWrite())return false;
   const item=state.inventory[index];
   if(!item || item.stock<=0) return false;
   const stamp=formatDateTime24();
-  const logEntry={time:stamp.time,name:item.name,qty:'1 unidad',student:contextStudent,context:contextReason};
+  const logEntry={date:stamp.date,time:stamp.time,name:item.name,qty:'1 unidad',studentId:studentId||null,studentName:contextStudent,context:contextReason};
   if(window.novimedCloudReady && item.id && window.novimedCloudUseInventory){
     window.novimedCloudUseInventory(item.id, logEntry).catch(err=>{
       console.error('Uso de inventario a nube:',err);
       showToast('Registro local','El movimiento no llegó a la nube ('+(err.code||'error')+').');
       item.stock-=1;
-      state.inventoryHistory.unshift([logEntry.time,logEntry.name,logEntry.qty,logEntry.student,logEntry.context]);
+      state.inventoryHistory.unshift({...logEntry});
       renderInventory();
     });
   }else{
     item.stock-=1;
-    state.inventoryHistory.unshift([logEntry.time,logEntry.name,logEntry.qty,logEntry.student,logEntry.context]);
+    state.inventoryHistory.unshift({...logEntry});
   }
   if(notify){
     showSuccess('Uso registrado','El stock fue actualizado y el movimiento quedó en el historial.');
@@ -611,7 +747,9 @@ el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenci
 function populateAttentionOptions(){
   const studentSelect=el('careStudent');
   if(studentSelect){
-    studentSelect.innerHTML=(state.students||[]).map((s,i)=>`<option value="${i}" ${i===state.selectedStudentIndex?'selected':''}>${escapeHtml(s.fullName||'Estudiante sin nombre')}</option>`).join('');
+    studentSelect.innerHTML=(state.students||[]).map((s,i)=>({s,i}))
+      .filter(x=>!x.s.isArchived)
+      .map(({s,i})=>`<option value="${i}" ${i===state.selectedStudentIndex?'selected':''}>${escapeHtml(s.fullName||'Estudiante sin nombre')}</option>`).join('');
   }
   const medSelect=el('careMedication');
   if(medSelect){
@@ -694,7 +832,7 @@ function renderSystemInfo(){
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
 function renderAll(){
-  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
+  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
   el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
   const hero=el('heroTitle');
   if(hero)hero.textContent=state.alertSent?((state.currentAlert&&state.currentAlert.studentName)||'Estudiante')+' necesita atención':'Sin alertas activas';
@@ -715,11 +853,58 @@ function renderAll(){
   if(shouldRender('renderReports'))renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
-function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}function openReportModal(){
-  if(!guardWrite())return;openModal('reportModal')}function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){
+function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}/* V40.1 + V41 — El modal de alerta venía prellenado con el caso demo y
+   capturaba el estudiante como texto libre, de modo que la alerta nunca
+   podía enlazarse a una ficha. Ahora se elige de la matrícula real y el
+   texto libre queda como excepción explícitamente rotulada. */
+function populateAlertStudentOptions(){
+  const sel=el('reportStudent');
+  if(!sel)return;
+  const list=activeStudents();
+  sel.innerHTML='<option value="">— Selecciona un estudiante —</option>'
+    +list.map(s=>`<option value="${escapeHtml(s.id||'')}">${escapeHtml(s.fullName||'Estudiante sin nombre')}${s.course?' · '+escapeHtml(s.course):''}</option>`).join('')
+    +'<option value="__other__">Estudiante no registrado en Novimed</option>';
+  sel.onchange=()=>{
+    const f=el('reportStudentOtherField');
+    if(f)f.style.display=sel.value==='__other__'?'':'none';
+  };
+}
+function openReportModal(){
+  if(!guardWrite())return;
+  populateAlertStudentOptions();
+  ['reportRoom','reportSymptoms','reportStudentOther'].forEach(id=>{const n=el(id);if(n)n.value='';});
+  const f=el('reportStudentOtherField');if(f)f.style.display='none';
+  openModal('reportModal');
+}
+/* Contrato único de lectura del formulario: sync.js lo reutiliza para no
+   duplicar el parseo del DOM en dos módulos. */
+window.novimedReadAlertForm=function(){
+  const sel=el('reportStudent');
+  const value=sel?sel.value:'';
+  const other=readOptional('reportStudentOther');
+  const linked=value&&value!=='__other__'?studentById(value):null;
+  return {
+    studentId:linked?linked.id:null,
+    studentName:linked?(linked.fullName||'Estudiante sin nombre'):(other||'Estudiante no registrado'),
+    location:readOptional('reportRoom')||'Ubicación sin registrar',
+    symptoms:readOptional('reportSymptoms')||'Síntomas sin especificar',
+    valid:!!(linked||other)
+  };
+};function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){
   if(!guardWrite())return;closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
 function submitTeacherAlert(){
-  if(!guardWrite())return;const student=(el('reportStudent')?.value||'Estudiante sin nombre').trim();const location=(el('reportRoom')?.value||'Ubicación sin registrar').trim();const symptoms=(el('reportSymptoms')?.value||'Síntomas sin especificar').trim();state.currentAlert={studentName:student,location,symptoms,allergy:'Maní',alertTimeLabel:'Ahora'};state.alertSent=true;state.activities.unshift(['Ahora','red',`Nueva alerta de ${student}`,`${location} · docente reporta síntomas`]);closeModal('reportModal');showSuccess('Alerta enviada','El departamento médico recibió la notificación en tiempo real.');renderAll();showPage('alertas')}
+  if(!guardWrite())return;
+  const form=window.novimedReadAlertForm();
+  if(!form.valid){showToast('Estudiante requerido','Selecciona un estudiante de la matrícula o escribe el nombre si no está registrado.');return;}
+  /* Sin campo `allergy`: las alergias se derivan de la ficha por studentId
+     en tiempo de render. Nunca se copian ni se asumen. */
+  state.currentAlert={studentId:form.studentId,studentName:form.studentName,location:form.location,symptoms:form.symptoms,alertTimeLabel:'Ahora'};
+  state.alertSent=true;
+  state.activities.unshift(['Ahora','red','Nueva alerta de '+form.studentName,form.location+' · docente reporta síntomas'+(form.studentId?'':' · sin ficha enlazada')]);
+  closeModal('reportModal');
+  showSuccess('Alerta enviada','El departamento médico recibió la notificación en tiempo real.');
+  renderAll();showPage('alertas');
+}
 function submitCare(){
   if(!guardWrite())return;
   let selectedIndex=parseInt(el('careStudent')?.value || state.selectedStudentIndex || 0,10);
@@ -743,7 +928,10 @@ function submitCare(){
   const record={
     date:stamp.date,
     time:stamp.time,
-    student:selectedStudent?.fullName || 'Estudiante sin nombre',
+    /* V41 — studentId es la clave; studentName queda desnormalizado
+       solo para lectura (ficha archivada, renombrada o no sincronizada). */
+    studentId:selectedStudent?.id || null,
+    studentName:selectedStudent?.fullName || 'Estudiante sin nombre',
     bodyArea:readOptional('careBodyArea') || 'Sin especificar',
     eva:readOptional('careEva') || 'Sin especificar',
     symptoms:readOptional('careSymptoms') || 'Sin especificar',
@@ -756,7 +944,7 @@ function submitCare(){
     family:'Pendiente'
   };
   if(medicationInventoryIndex!==null && Number.isFinite(medicationInventoryIndex)){
-    registerInventoryUse(medicationInventoryIndex,record.student,'Administrado en atención médica',false);
+    registerInventoryUse(medicationInventoryIndex,record.studentName,'Administrado en atención médica',false,record.studentId);
   }
   if(window.novimedCloudReady && window.novimedCloudAddCareRecord){
     const opId=window.novimedNewOpId?window.novimedNewOpId():null;
@@ -770,24 +958,41 @@ function submitCare(){
     state.careRecords.unshift(record);
   }
   state.careSaved=true;
-  state.activities.push([stamp.time,'green','Atención registrada',`${record.student} · ${record.eva} · ${record.bodyArea}`]);
+  state.activities.push([stamp.time,'green','Atención registrada',`${record.studentName} · ${record.eva} · ${record.bodyArea}`]);
   closeModal('attentionModal');
   showSuccess('Atención registrada','La atención médica quedó documentada y la familia fue notificada.');
   renderAll();
   showPage('atenciones');
 }
+/* V41 — confirmFamilyRead escribía sobre state.careRecords[0] (el registro
+   MÁS RECIENTE), no sobre el vinculado al caso: la confirmación podía
+   aterrizar en el expediente de otro estudiante. Ahora se resuelve por el
+   id de atención que el caso activo enlaza; si no hay vínculo, no se escribe
+   sobre ningún expediente. */
+function linkedCareRecord(){
+  const id=window.novimedLinkedCareRecordId&&window.novimedLinkedCareRecordId();
+  if(id){
+    const byId=(state.careRecords||[]).find(r=>r&&r.id===id);
+    if(byId)return byId;
+  }
+  const sid=activeAlert().studentId;
+  if(!sid)return null;
+  return (state.careRecords||[]).find(r=>r&&r.studentId===sid)||null;
+}
 function confirmFamilyRead(){
   if(!guardWrite())return;
-  state.familyRead=true;
-  const latest=(state.careRecords||[])[0];
-  if(latest){
-    latest.family='Confirmada';
-    if(window.novimedCloudReady && latest.id && window.novimedCloudConfirmFamily){
-      window.novimedCloudConfirmFamily(latest.id).catch(err=>console.error('Confirmación a nube:',err));
-    }
+  const target=linkedCareRecord();
+  if(!target){
+    showToast('Sin atención vinculada','No hay una atención enlazada a este caso: la confirmación no se registra sobre ningún expediente.');
+    return;
   }
-  state.activities.push(['Ahora','amber','Familia confirmó lectura','Ana Martínez recibió la información']);
-  showSuccess('Lectura confirmada','La confirmación familiar quedó registrada en trazabilidad.');
+  state.familyRead=true;
+  target.family='Confirmada';
+  if(window.novimedCloudReady && target.id && window.novimedCloudConfirmFamily){
+    window.novimedCloudConfirmFamily(target.id).catch(err=>console.error('Confirmación a nube:',err));
+  }
+  state.activities.push(['Ahora','amber','Confirmación de lectura registrada',recordStudentName(target)]);
+  showSuccess('Lectura confirmada','La confirmación quedó registrada en la atención de '+recordStudentName(target)+'.');
   renderAll();
 }
 function showSuccess(t,txt){el('successTitle').textContent=t;el('successText').textContent=txt;openModal('successModal')}
@@ -807,8 +1012,8 @@ el('searchInput').addEventListener('input',e=>{
     }
     const med=state.inventory.find(m=>normalizeText(m.name).includes(q));
     if(med){showToast('Inventario',`${med.name} · ${med.stock} unidades disponibles`);return;}
-    const care=(state.careRecords||[]).find(r=>normalizeText(r.student).includes(q)||normalizeText(r.symptoms).includes(q));
-    if(care){showToast('Atención registrada',`${care.student} · ${care.date} ${care.time}`);}
+    const care=(state.careRecords||[]).find(r=>normalizeText(recordStudentName(r)).includes(q)||normalizeText(r.symptoms).includes(q));
+    if(care){showToast('Atención registrada',`${recordStudentName(care)} · ${care.date} ${care.time}`);}
   },220);
 });
 el('searchInput').addEventListener('keydown',e=>{
@@ -855,5 +1060,6 @@ window.novimedConfirmFamilyReadLocal = confirmFamilyRead;
   ['submitTeacherAlert',submitTeacherAlert],['submitCare',submitCare],
   ['setBodyArea',setBodyArea],
   ['expandTable',expandTable],['loadOlderFor',loadOlderFor],['openEditStudentModal',openEditStudentModal],
-  ['deleteStudent',deleteStudent],['exportCareCSV',exportCareCSV],['exportStudentsCSV',exportStudentsCSV]
+  ['archiveStudent',archiveStudent],['exportCareCSV',exportCareCSV],['exportStudentsCSV',exportStudentsCSV],
+  ['openFichaModalById',openFichaModalById],['toggleArchivedStudents',toggleArchivedStudents]
 ].forEach(([name,fn])=>{ if(typeof fn==='function') window[name]=window[name]||fn; });
