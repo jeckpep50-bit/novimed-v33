@@ -1,0 +1,225 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOVIMED — Reglas de seguridad de Firestore (V41.1)
+//
+// PRINCIPIOS
+//   1. Denegación por defecto. Nada fuera de schools/{schoolId} es accesible.
+//   2. Aislamiento por institución: el schoolId del claim manda, no la ruta.
+//   3. Ningún historial clínico se borra. Nunca. Ni con rol SuperAdmin.
+//   4. Ninguna escritura clínica sin autor verificado contra request.auth.uid.
+//   5. El cliente no puede fechar en el futuro ni falsear al servidor.
+//
+// ROLES (claims del token): SuperAdmin · Admin_Colegio · Personal_Salud · Consulta
+// Las sesiones anónimas solo existen dentro del tenant de ventas 'eight-demo'.
+//
+// ⚠️ ORDEN DE DESPLIEGUE OBLIGATORIO
+//    Estas reglas deben publicarse ANTES de desplegar el código de V41.1.
+//    Si el código llega primero, el archivado lógico y la autoría fallarán
+//    contra las reglas antiguas. Si las reglas llegan primero, el código
+//    antiguo sigue funcionando salvo el borrado en duro, que es exactamente
+//    lo que queremos bloquear. Ver RUNBOOK §7.
+// ═══════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Identidad y pertenencia ─────────────────────────────────────────
+    function signedIn()      { return request.auth != null; }
+    function claims()        { return request.auth.token; }
+    function role()          { return signedIn() && 'role' in claims() ? claims().role : 'Anonimo'; }
+    function isAnonymous()   { return signedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous'; }
+    function isSuperAdmin()  { return role() == 'SuperAdmin'; }
+
+    // El tenant demo es el ÚNICO lugar donde una sesión anónima tiene acceso.
+    function belongsTo(schoolId) {
+      return signedIn() && (
+        isSuperAdmin() ||
+        ('schoolId' in claims() && claims().schoolId == schoolId) ||
+        (isAnonymous() && schoolId == 'eight-demo')
+      );
+    }
+
+    // Consulta = solo lectura. El resto de roles reconocidos pueden escribir.
+    function canWrite(schoolId) {
+      return belongsTo(schoolId) &&
+             (isAnonymous() || role() in ['SuperAdmin', 'Admin_Colegio', 'Personal_Salud']);
+    }
+
+    // ─── Autoría verificada ──────────────────────────────────────────────
+    // El uid del documento debe ser el uid que ejecuta la escritura. Un
+    // cliente no puede atribuir un acto clínico a otra persona.
+    function authoredByCaller(data) {
+      return 'createdBy' in data
+          && data.createdBy is map
+          && 'uid' in data.createdBy
+          && data.createdBy.uid == request.auth.uid;
+    }
+    function updateAuthoredByCaller() {
+      return 'updatedBy' in request.resource.data
+          && request.resource.data.updatedBy is map
+          && request.resource.data.updatedBy.uid == request.auth.uid;
+    }
+
+    // ─── Cronología honesta ──────────────────────────────────────────────
+    // createdAt es el momento del HECHO CLÍNICO (reloj del cliente), no el de
+    // la recepción: una atención registrada sin red se sincroniza horas
+    // después y debe conservar su hora real. Por eso se permite el pasado sin
+    // límite (registro en diferido) pero nunca el futuro más allá de una
+    // tolerancia de desfase de reloj de 5 minutos.
+    function sanePastTimestamp(data) {
+      return 'createdAt' in data
+          && data.createdAt is number
+          && data.createdAt <= request.time.toMillis() + 300000;
+    }
+
+    // Solo cambian los campos listados: el resto del documento es inmutable.
+    function onlyChanges(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  ÁRBOL MULTI-TENANT
+    // ═══════════════════════════════════════════════════════════════════
+    match /schools/{schoolId} {
+
+      allow read:   if belongsTo(schoolId);
+      allow write:  if false;   // el documento raíz del colegio se gestiona fuera de la app
+
+      // ─── FICHAS DE ESTUDIANTES ─────────────────────────────────────────
+      // Nunca se borran. Se archivan con motivo obligatorio y autoría.
+      match /students/{studentId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data);
+
+        // Dos formas legítimas de update:
+        //  (a) archivado lógico, que exige motivo no vacío;
+        //  (b) edición ordinaria de la ficha, que NO puede tocar el archivado.
+        allow update: if canWrite(schoolId)
+                      && updateAuthoredByCaller()
+                      && (
+                        // (a) archivar
+                        (
+                          request.resource.data.isArchived == true
+                          && 'archivedReason' in request.resource.data
+                          && request.resource.data.archivedReason is string
+                          && request.resource.data.archivedReason.size() >= 3
+                          && request.resource.data.archivedReason.size() <= 300
+                          && 'archivedBy' in request.resource.data
+                          && request.resource.data.archivedBy.uid == request.auth.uid
+                          && onlyChanges(['isArchived','archivedReason','archivedAt','archivedBy','updatedAt','updatedBy'])
+                        )
+                        ||
+                        // (b) editar la ficha sin alterar el estado de archivado
+                        (
+                          !onlyChanges(['isArchived','archivedReason','archivedAt','archivedBy','updatedAt','updatedBy'])
+                          && request.resource.data.get('isArchived', false) == resource.data.get('isArchived', false)
+                          && request.resource.data.createdBy == resource.data.createdBy
+                        )
+                        ||
+                        // (c) backfill de claves foráneas (migración histórica)
+                        (
+                          isSuperAdmin()
+                          && onlyChanges(['studentLinkedAt','studentLinkedBy','updatedAt','updatedBy'])
+                        )
+                      );
+
+        // 🔒 Un historial clínico de un menor no se destruye desde un cliente.
+        allow delete: if false;
+      }
+
+      // ─── ATENCIONES ────────────────────────────────────────────────────
+      // Append-only. Lo único mutable es la confirmación familiar y el
+      // enlace de clave foránea añadido por la migración.
+      match /careRecords/{recordId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data);
+        allow update: if canWrite(schoolId)
+                      && updateAuthoredByCaller()
+                      && request.resource.data.createdBy == resource.data.createdBy
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && (
+                        onlyChanges(['family','updatedAt','updatedBy'])
+                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+                      );
+        allow delete: if false;
+      }
+
+      // ─── ALERTAS ───────────────────────────────────────────────────────
+      match /alerts/{alertId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data)
+                      && request.resource.data.status == 'pending';
+        allow update: if canWrite(schoolId)
+                      && request.resource.data.createdBy == resource.data.createdBy
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && (
+                        onlyChanges([
+                          'status','attendedAt','attendedTimeLabel','attendedBy',
+                          'familyConfirmedAt','familyReadTimeLabel','familyConfirmedBy',
+                          'careRecordId','updatedAt','updatedBy'
+                        ])
+                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+                      );
+        allow delete: if false;
+      }
+
+      // ─── INVENTARIO ────────────────────────────────────────────────────
+      // El stock sí se corrige (es un conteo físico), pero cada movimiento
+      // deja rastro inmutable en inventoryLog.
+      match /inventory/{itemId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data);
+        allow update: if canWrite(schoolId)
+                      && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if false;
+      }
+
+      // ─── TRAZABILIDAD DE INSUMOS ───────────────────────────────────────
+      // Entrega de medicación: sello de tiempo y responsable obligatorios,
+      // y absolutamente inmutable salvo el enlace de la migración.
+      match /inventoryLog/{logId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data);
+        allow update: if isSuperAdmin()
+                      && onlyChanges(['studentId','studentName','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']);
+        allow delete: if false;
+      }
+
+      // ─── VACUNAS ───────────────────────────────────────────────────────
+      match /vaccines/{vaccineId} {
+        allow read:   if belongsTo(schoolId);
+        allow create: if canWrite(schoolId)
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data);
+        allow update: if canWrite(schoolId)
+                      && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if false;
+      }
+
+      // ─── METADATOS OPERATIVOS ──────────────────────────────────────────
+      // Caso activo y banderas de siembra: coordinación efímera, no historia
+      // clínica. Se permite sobrescritura, pero solo dentro del tenant.
+      match /meta/{docId} {
+        allow read:   if belongsTo(schoolId);
+        allow write:  if canWrite(schoolId);
+      }
+
+      // Cualquier colección futura queda denegada hasta que se le escriba
+      // una regla explícita. Añadir datos no debe abrir accesos por descuido.
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

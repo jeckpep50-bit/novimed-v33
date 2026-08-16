@@ -328,6 +328,11 @@ function renderFamily(){
   const contacts=(student&&student.contacts||[]).filter(c=>c&&(c.name||c.phone));
   const demo=isDemoTenant();
 
+  /* C3 — Deuda operativa declarada: el canal familiar NO existe. Mientras no
+     exista, el módulo se rotula como vista previa en instituciones reales
+     para que ningún cliente lo perciba como una función entregada. */
+  const head=el('familyPreviewBadge');
+  if(head){head.textContent=demo?'Demostración':'Vista previa · no operativo';head.className='badge '+(demo?'blue':'amber');}
   if(!hasCase&&!demo){
     box.innerHTML='<p style="color:#71819b;font-size:13px;line-height:1.5">Cuando se registre una atención sobre una ficha enlazada, aquí aparecerán los contactos de emergencia y el estado de la notificación.</p>';
   }else{

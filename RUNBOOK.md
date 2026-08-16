@@ -62,3 +62,46 @@ API Key web: pública por diseño; su seguridad = restricciones (referrer + 3 AP
 
 ## 7. Contactos de plataforma
 Firebase Console: proyecto `novimed-2c5e9` · Netlify: sitio `mednovid` · GitHub: repo privado `novimed-v33`.
+
+
+## 7. Despliegue de V41.1 — ORDEN OBLIGATORIO
+
+El orden importa: las reglas primero. Si el código llega antes, el archivado
+lógico y la autoría fallarán contra las reglas antiguas y quedarán encolados.
+Si llegan las reglas primero, el código V40 en dispositivos sin actualizar
+sigue funcionando salvo el borrado en duro, que es justo lo que se bloquea.
+
+### 7.1 Publicar reglas (Bloqueante ①)
+Desde Firebase Console (funciona en iPad, no requiere CLI):
+1. Firebase → Firestore → **Rules** → copiar íntegro `firestore.rules` del repositorio.
+2. **Antes de Publicar**, usar el *Rules Playground* con tres simulaciones:
+   - `delete` sobre `schools/eight-demo/students/{cualquiera}` → debe **denegar**.
+   - `create` en `careRecords` con `createdBy.uid` distinto del uid autenticado → debe **denegar**.
+   - `update` de archivado con `archivedReason` vacío → debe **denegar**.
+3. Publicar. Guardar copia del texto anterior por si hay que revertir.
+4. Verificar en la app: crear una ficha y registrar una atención. Si aparece
+   el toast "Permiso denegado por el servidor", las reglas no coinciden con
+   el código: revertir a las anteriores y revisar antes de seguir.
+
+### 7.2 Backfill (Bloqueante ②)
+1. Cloud Shell (console.cloud.google.com, funciona en Safari):
+   `gcloud config set project novimed-2c5e9`
+2. `npm init -y && npm i firebase-admin` y subir `backfill-student-ids.mjs`.
+3. **Seco primero, siempre**: `node backfill-student-ids.mjs --school=<ID> --dry-run`
+4. Revisar el reporte JSON: coincidencias exactas / ambiguas / huérfanas.
+   - Ambiguas ⇒ hay nombres duplicados en la matrícula. Corregirlos y repetir.
+   - Huérfanas ⇒ registros de estudiantes que nunca tuvieron ficha. Se quedan
+     como "Sin ficha enlazada": es la verdad, no un defecto.
+5. Aplicar: `node backfill-student-ids.mjs --school=<ID> --apply` (pide teclear APLICAR).
+6. **Borrar el reporte del disco al terminar**: contiene nombres de menores.
+
+### 7.3 Deploy del código
+Procedimiento estándar de §1. Después, ejecutar el checklist de 9 puntos del
+INFORME_ESTADO en iPad Safari, en vertical y en horizontal.
+
+### 7.4 Reversión
+- Reglas: Firebase Console → Rules → historial de versiones → republicar la anterior.
+- Código: Netlify → Deploys → publicar el deploy previo.
+- Backfill: **no es reversible automáticamente**. Por eso el modo seco no es opcional.
+  Los campos añadidos (`studentId`, `studentLinkedBy`) son aditivos: si algo sale
+  mal, el estado previo se restaura eliminando esos campos, nunca el documento.

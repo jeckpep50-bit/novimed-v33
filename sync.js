@@ -311,7 +311,9 @@ async function seedIfNeeded(){
   if(!won) return;
   const base = Date.now();
   const batch = writeBatch(db);
-  const seedAuthor = { uid: "seed", email: null, role: "SuperAdmin" };
+  /* El autor de la siembra es la sesión que la ejecuta: un uid ficticio
+     ("seed") sería rechazado por la regla createdBy.uid == request.auth.uid. */
+  const seedAuthor = authorStamp();
   /* V41 — La siembra crea las fichas con refs explícitas para poder enlazar
      las claves foráneas de atenciones, vacunas e inventoryLog. La demo deja
      de depender de coincidencias por nombre. */
@@ -367,7 +369,7 @@ async function seedAlertsIfNeeded(){
   [
     {studentName:"Mateo Ruiz", location:"Aula 2A", symptoms:"Golpe leve en recreo", priority:"Media", status:"attended", timeLabel:"09:50"},
     {studentName:"Valentina Pérez", location:"Aula 1C", symptoms:"Dolor de cabeza", priority:"Baja", status:"family_confirmed", timeLabel:"08:41"}
-  ].forEach((a,i)=> batch.set(doc(colRef("alerts")), {...a, studentId: ids[a.studentName] || null, createdAt: base - (i+1), createdBy: {uid:"seed", email:null, role:"SuperAdmin"}}));
+  ].forEach((a,i)=> batch.set(doc(colRef("alerts")), {...a, studentId: ids[a.studentName] || null, createdAt: base - (i+1), createdBy: authorStamp()}));
   await batch.commit();
 }
 
@@ -494,7 +496,15 @@ function withTimeout(promise){
 }
 function cloudOp(type, payload, opId){
   return withTimeout(queueExecutors[type](payload)).catch(err => {
+    /* El dato SIEMPRE se conserva (se encola), pero un rechazo por reglas no
+       se resuelve reintentando: reintentarlo 6 veces durante 10 minutos
+       oculta el problema justo cuando hay que verlo. Se avisa de inmediato
+       y con el nombre correcto de la causa. */
     enqueueOp(type, payload, opId || makeOpId());
+    if(err && err.code === "permission-denied"){
+      uiNotify("Permiso denegado por el servidor",
+        "Las reglas de Firestore rechazaron esta operación (" + type + "). El dato quedó guardado en este dispositivo. Avisa al administrador: probablemente falte publicar las reglas de la versión actual.");
+    }
     throw err;
   });
 }
@@ -502,7 +512,27 @@ function cloudOp(type, payload, opId){
    Firestore. No hay escritura sin autor: si algún día faltara, faltaría
    también en el documento y la regla del servidor debe rechazarla. */
 function authored(payload, opId){
-  return stripUndefined({ ...payload, clientOpId: opId, createdAt: Date.now(), createdBy: authorStamp() });
+  return stripUndefined({
+    ...payload,
+    clientOpId: opId,
+    /* ── DOS RELOJES, DOS HECHOS DISTINTOS ──────────────────────────────
+       createdAt      : cuándo OCURRIÓ el hecho clínico (reloj del cliente).
+                        Es JSON-safe, sobrevive a la cola offline y es el
+                        campo por el que se ordena. El servidor NO debe
+                        sobrescribirlo: una atención registrada sin red a
+                        las 10:00 y sincronizada a las 14:00 ocurrió a las
+                        10:00. Sobrescribirla corrompería la historia clínica.
+       serverCreatedAt: cuándo lo RECIBIÓ el servidor (reloj de confianza).
+                        Se aplica al ejecutar, nunca en el payload, porque
+                        el sentinel serverTimestamp() no sobrevive a
+                        JSON.stringify en localStorage.
+       La diferencia entre ambos es, por definición, la latencia offline, y
+       queda auditable. Las reglas exigen createdAt <= now + 5 min: se puede
+       registrar en diferido, nunca en el futuro.
+       ─────────────────────────────────────────────────────────────────── */
+    createdAt: Date.now(),
+    createdBy: authorStamp()
+  });
 }
 window.novimedCloudAddStudent = (student, opId) =>
   cloudOp("addStudent", authored(student, opId), opId);
