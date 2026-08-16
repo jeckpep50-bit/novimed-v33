@@ -1,5 +1,14 @@
 # NOVIMED — Changelog
 
+## V42.0 — Lectura dual: el héroe deja de fiarse del caso único
+
+Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta es la fase 1, sin riesgo por diseño: se sigue escribiendo en `active-case` igual que antes).
+
+- **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
+- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `scripts/smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+- Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
+- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `tests/firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `scripts/smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+
 ## V41.1 — Vista Docente: formulario real
 
 - **Hallazgo:** el panel de Vista Docente traía `value="Sofía Martínez"` y los síntomas del caso demo escritos en el textarea. Peor aún, esos dos campos **nunca se leían**: aparecían una sola vez en el proyecto —en su propia plantilla— y el botón abría el modal descartando lo que el docente hubiera escrito.

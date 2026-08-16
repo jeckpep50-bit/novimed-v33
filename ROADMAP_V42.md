@@ -43,14 +43,13 @@ Todo lo que hoy vive en `active-case` o bien ya existe en `alerts`, o bien es te
 
 El orden importa. Cada fase deja el sistema desplegable; ninguna requiere un "big bang".
 
-### V42.0 — Lectura dual (sin riesgo)
+### V42.0 — Lectura dual (sin riesgo) ✅ Entregado — ver `CHANGELOG.md`
 La app empieza a **leer** de `alerts` y sigue **escribiendo** en `active-case`. Si algo falla, se revierte publicando el deploy anterior sin tocar datos.
 
 - Nuevo estado: `state.activeAlertId` (la alerta enfocada) y `state.pendingAlerts` (derivado de `state.alerts`).
-- `activeAlert()` deja de leer `state.currentAlert` y pasa a resolver `state.alerts.find(a => a.id === state.activeAlertId)`, con fallback a la `pending` más reciente.
-- `renderAll()` deriva héroe, KPI de alertas y campanas de la cola, no del documento.
-- `mapFirestoreToLocalState()` queda reducido a leer el foco, no el estado.
-- **Criterio de aceptación:** con `active-case` borrado manualmente en Firestore, el panel sigue funcionando correctamente.
+- Implementado como una fuente **doble**, no como reemplazo: `mapFirestoreToLocalState()` (sync.js) sigue aportando la señal inmediata al iniciar sesión, y `applyQueueDerivedFocus()` (core.js, nueva, corre al inicio de cada `renderAll()`) resuelve desde `state.alerts` por `activeAlertId` con fallback a la `pending` más reciente, y GANA cuando resuelve. `activeAlert()` en sí no cambió de firma — sigue leyendo `state.currentAlert` — pero ese campo ahora lo mantienen ambas fuentes, no solo el documento. Se descubrió en la práctica que la versión "solo cola, sin fuente inmediata" dejaba un parpadeo a neutro entre el primer snapshot del caso y la conexión del listener de `alerts`; de ahí el diseño final.
+- `renderAll()` deriva héroe y banderas (`alertSent`/`careSaved`/`familyRead`) de la cola cuando resuelve; el KPI de alertas (`kpiAlerts`) ya las derivaba de `state.alerts` desde antes de V42.
+- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `scripts/smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
 
 ### V42.1 — Corte de escritura
 Se deja de escribir en `active-case` y se elimina el código muerto.

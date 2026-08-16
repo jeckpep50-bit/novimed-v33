@@ -3,6 +3,11 @@ const state={
   alertSent:false,
   careSaved:false,
   familyRead:false,
+  /* V42.0 — foco de la cola real de alertas (ver ROADMAP_V42.md §3).
+     activeAlertId: qué alerta mira el panel. pendingAlerts: derivado de
+     state.alerts en cada render, no se escribe a mano. */
+  activeAlertId:null,
+  pendingAlerts:[],
   selectedStudentIndex:0,
   currentAlert:{studentId:null,studentName:'Sofía Martínez',location:'Aula 3B · 2° piso',symptoms:'Mareo, náuseas y dolor abdominal durante la clase.',alertTimeLabel:'10:24'},
   students:[
@@ -195,6 +200,7 @@ window.novimedActivateTenant=function(schoolId,session){
     state.alertSent=false;
   }
   state.alerts=undefined;
+  state.activeAlertId=null;state.pendingAlerts=[];
   state.careSaved=false;state.familyRead=false;
   tableExpanded.students=false;tableExpanded.care=false;tableExpanded.alerts=false;
   forceFullRender=true;
@@ -218,6 +224,43 @@ function showToast(t,txt){el('toastTitle').textContent=t;el('toastText').textCon
    como verificada: el fallback ahora declara ausencia, no inventa un caso. */
 const NEUTRAL_ALERT={studentId:null,studentName:'Sin alertas activas',location:'El panel mostrará aquí la próxima alerta docente',symptoms:'Todo en calma por ahora.',alertTimeLabel:''};
 function activeAlert(){return state.currentAlert||NEUTRAL_ALERT}
+
+/* ============================================================
+   V42.0 — LECTURA DUAL (ROADMAP_V42.md §3)
+   El caso único schools/{id}/meta/active-case sigue existiendo y
+   escribiéndose (V42.1 lo retira), pero el héroe, sus banderas
+   (alertSent/careSaved/familyRead) y activeAlert() ya no se fían de él:
+   se derivan aquí de la cola real `state.alerts`, a partir del foco
+   `state.activeAlertId` que sync.js mantiene actualizado.
+   Diseño deliberadamente NO destructivo: si la cola todavía no resuelve
+   nada (sin sesión de nube, alerta recién enviada en modo local que el
+   listener aún no reflejó, tenant demo cuyo guion vive solo en el caso
+   legado), se conserva el valor previo de state.currentAlert en vez de
+   forzarlo a neutro — es lectura dual, no un reemplazo.
+   Criterio de aceptación (ROADMAP_V42.md): con active-case borrado a mano
+   en Firestore, el panel debe seguir funcionando correctamente. */
+function resolveActiveAlertFromQueue(){
+  const alerts=Array.isArray(state.alerts)?state.alerts:null;
+  if(!alerts)return null;
+  const byId=state.activeAlertId?alerts.find(a=>a&&a.id===state.activeAlertId):null;
+  return byId||alerts.find(a=>a&&a.status==='pending')||null;
+}
+function applyQueueDerivedFocus(){
+  const alerts=Array.isArray(state.alerts)?state.alerts:null;
+  state.pendingAlerts=alerts?alerts.filter(a=>a&&a.status==='pending'):[];
+  const focus=resolveActiveAlertFromQueue();
+  if(!focus)return;
+  state.currentAlert={
+    studentId:focus.studentId||null,
+    studentName:focus.studentName||'Sin alertas activas',
+    location:focus.location||'El panel mostrará aquí la próxima alerta docente',
+    symptoms:focus.symptoms||'Todo en calma por ahora.',
+    alertTimeLabel:focus.timeLabel||''
+  };
+  state.alertSent=true;
+  state.careSaved=focus.status==='attended'||focus.status==='family_confirmed';
+  state.familyRead=focus.status==='family_confirmed';
+}
 
 /* ============================================================
    V41 — RESOLUCIÓN POR CLAVE FORÁNEA
@@ -1014,6 +1057,7 @@ function renderSystemInfo(){
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
 function renderAll(){
+  applyQueueDerivedFocus();
   if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
   el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
   const hero=el('heroTitle');

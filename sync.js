@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import {
   initializeFirestore,
+  connectFirestoreEmulator,
   collection,
   addDoc,
   query,
@@ -21,6 +22,7 @@ import {
 } from "firebase/firestore";
 import {
   getAuth,
+  connectAuthEmulator,
   signInAnonymously,
   signInWithEmailAndPassword,
   signOut,
@@ -79,6 +81,15 @@ if(APPCHECK_SITE_KEY){
    la lectura inicial funciona pero los push en vivo nunca llegan.
    Long polling es el transporte compatible recomendado por Firebase para estos entornos. */
 const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+/* Solo para desarrollo/pruebas locales: conecta a los emuladores en vez del
+   proyecto real. Inerte por diseño (mismo patrón que App Check/staging):
+   sin VITE_USE_EMULATOR=true, este bloque no se ejecuta y el comportamiento
+   es idéntico al de siempre. NUNCA debe activarse en un build de producción. */
+const USE_EMULATOR = env.VITE_USE_EMULATOR === "true";
+if(USE_EMULATOR){
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  window.novimedEnvName = "emulador";
+}
 let SCHOOL_ID = null; // V38: se resuelve por sesión (claims.schoolId) o modo demo
 /* V38: el caso activo vive DENTRO del tenant */
 const caseRef = () => doc(db, "schools", SCHOOL_ID, "meta", "active-case");
@@ -570,11 +581,27 @@ function safeRender(){
 }
 
 let currentAlertDocId = null;
+/* V42.0 — Lectura dual (ver ROADMAP_V42.md §3). DOS fuentes alimentan ahora
+   el héroe/banderas, a propósito:
+     1. Este documento único, como antes: señal INMEDIATA. El listener de
+        `alerts` (bind("alerts",...)) es un onSnapshot aparte que se conecta
+        un instante después de este (attachCollectionListeners() corre tras
+        seedIfNeeded()); sin esta señal directa, la primera pantalla tras
+        iniciar sesión parpadearía en neutro hasta que la cola llegara.
+     2. La cola real `alerts`, en applyQueueDerivedFocus() (core.js): señal
+        RESILIENTE. Se aplica sobre esto en cada renderAll() y GANA cuando
+        resuelve — es lo único que sigue funcionando si este documento se
+        borra (criterio de aceptación de V42.0).
+   `activeAlertId` es "pegajoso" a propósito, igual que `currentAlertDocId`:
+   solo se actualiza cuando el documento trae un alertId real, nunca se
+   resetea a null aquí, para que el foco sobreviva si el documento vuelve a
+   un payload neutro (p. ej. ensureCaseExists() tras borrar el documento). */
 function mapFirestoreToLocalState(data){
   if(data && data.alertId) currentAlertDocId = data.alertId;
   if(data && data.careRecordId) linkedCareRecordId = data.careRecordId;
   const s = window.novimedState;
   if(!s || !data) return;
+  if(data.alertId) s.activeAlertId = data.alertId;
 
   const isDemoTenant = SCHOOL_ID === "eight-demo";
   if(looksLikeDemoLeak(data)){ cleanDemoLeakOnce(); return; }
@@ -844,6 +871,7 @@ window.confirmFamilyRead = async function(){
    Si la autenticación falla, la app continúa en modo local (sin tiempo real). */
 window.novimedSyncStatus = "Conectando…";
 const auth = getAuth(app);
+if(USE_EMULATOR) connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
 window.firebaseAuth = auth;
 
 let syncStarted = false;
