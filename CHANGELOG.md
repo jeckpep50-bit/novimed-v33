@@ -1,5 +1,17 @@
 # NOVIMED — Changelog
 
+## V41.1 — Vista Docente: formulario real
+
+- **Hallazgo:** el panel de Vista Docente traía `value="Sofía Martínez"` y los síntomas del caso demo escritos en el textarea. Peor aún, esos dos campos **nunca se leían**: aparecían una sola vez en el proyecto —en su propia plantilla— y el botón abría el modal descartando lo que el docente hubiera escrito.
+- **Causa del prellenado:** el panel se reconstruía con `innerHTML` en cada `renderAll()`, así que cualquier texto real se perdía; los valores fijos disimulaban el problema.
+- Panel reconstruido como formulario controlado en Vanilla JS: se construye **una vez** y después solo se refrescan opciones y validación, de modo que escribir no destruye foco ni contenido.
+- Estado inicial en blanco (`studentId`, `studentName`, `location`, `symptoms` vacíos; `isSubmitting:false`).
+- Combobox de estudiante alimentado desde la matrícula real (solo fichas activas), con teclado (↑/↓/Enter/Esc), roles ARIA y objetivos táctiles de 44px.
+- Al seleccionar estudiante se muestran sus alergias y condiciones derivadas de la ficha, antes de enviar.
+- Botón deshabilitado sin estudiante enlazado o con síntomas vacíos (`symptoms.trim() === ""`), y durante el envío. Errores de validación inline con `role="alert"`.
+- Reset completo del formulario únicamente tras un envío procesado con éxito.
+- `submitTeacherAlert(payload)` acepta ahora un payload: modal y panel docente comparten un único camino de escritura.
+
 ## V41 (actual) — Verdad clínica: autoría, claves foráneas y archivado
 
 **V40.1 — Hotfix de seguridad clínica (incluido)**

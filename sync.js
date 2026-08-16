@@ -674,16 +674,17 @@ function cleanDemoLeakOnce(){
     .catch(err => console.error("Limpieza de caso demo:", err));
 }
 
-window.submitTeacherAlert = async function(){
+/** @param {Object=} payload Payload ya validado (panel docente). Si se omite, se lee del modal. */
+window.submitTeacherAlert = async function(payload){
   if(window.novimedCanWrite && !window.novimedCanWrite()){ uiNotify("Solo lectura","Tu rol (Consulta) permite revisar la información, no modificarla."); return; }
   const cloudSessionReady = !!SCHOOL_ID;
-  /* V41 — Un solo contrato de lectura del formulario (core.js). La alerta
-     viaja con studentId; `allergy` desaparece del modelo: las alergias se
-     derivan de la ficha en tiempo de render, nunca se copian a la alerta. */
-  const form = window.novimedReadAlertForm ? window.novimedReadAlertForm() : null;
-  if(!form || !form.valid) { window.novimedSubmitTeacherAlertLocal?.(); return; }
+  /* V41 — Contrato único de payload: lo produce el panel docente o el modal.
+     La alerta viaja con studentId; `allergy` no existe en el modelo: las
+     alergias se derivan de la ficha en render, nunca se copian a la alerta. */
+  const form = payload || (window.novimedReadAlertForm ? window.novimedReadAlertForm() : null);
+  if(!form || !form.valid) { window.novimedSubmitTeacherAlertLocal?.(form); return; }
 
-  window.novimedSubmitTeacherAlertLocal?.();
+  window.novimedSubmitTeacherAlertLocal?.(form);
   if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{

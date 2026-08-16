@@ -49,7 +49,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V41';
+const NOVIMED_VERSION='V41.1';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -739,8 +739,185 @@ function saveMedicineToInventory(){
   renderAll();
   showPage('inventario');
 }
+/* ============================================================
+   V41.1 — VISTA DOCENTE: FORMULARIO REAL
+   Antes: plantilla innerHTML con `value="Sofía Martínez"` y los síntomas del
+   caso demo escritos en el textarea. Esos dos campos NUNCA se leían: el botón
+   abría el modal y descartaba lo escrito. Además, al re-renderizarse en cada
+   renderAll(), cualquier texto del docente se perdía — razón por la que el
+   original llevaba valores fijos.
+
+   Ahora: el panel se construye UNA vez y a partir de ahí solo se refrescan las
+   opciones de estudiante y el estado de validación, de modo que escribir no
+   destruye el foco ni el contenido. El estado vive en `teacherForm` y los
+   inputs son controlados contra él.
+   ============================================================ */
+const teacherForm={studentId:'',studentName:'',location:'',symptoms:'',isSubmitting:false,touched:{student:false,symptoms:false},open:false,highlight:-1};
+let teacherPaneBuilt=false;
+
+function teacherErrors(){
+  return {
+    student: teacherForm.studentId ? '' : 'Selecciona un estudiante de la matrícula.',
+    symptoms: teacherForm.symptoms.trim() ? '' : 'Describe lo observado antes de reportar.'
+  };
+}
+function teacherIsValid(){const e=teacherErrors();return !e.student && !e.symptoms;}
+
+function teacherMatches(){
+  const q=normalizeText(teacherForm.studentName);
+  const list=activeStudents();
+  if(!q)return list.slice(0,8);
+  return list.filter(s=>normalizeText(s.fullName).includes(q)||normalizeText(s.course).includes(q)).slice(0,8);
+}
+function renderTeacherOptions(){
+  const box=el('teacherStudentOptions');
+  if(!box)return;
+  if(!teacherForm.open){box.innerHTML='';box.style.display='none';el('teacherStudentInput')?.setAttribute('aria-expanded','false');return;}
+  const items=teacherMatches();
+  el('teacherStudentInput')?.setAttribute('aria-expanded','true');
+  if(!items.length){
+    box.innerHTML='<div class="combo-empty">Sin coincidencias en la matrícula de esta institución.</div>';
+    box.style.display='block';return;
+  }
+  box.innerHTML=items.map((s,i)=>`<div class="combo-option${i===teacherForm.highlight?' active':''}" role="option" id="teacherOpt${i}" aria-selected="${i===teacherForm.highlight}" data-id="${escapeHtml(s.id||'')}" data-name="${escapeHtml(s.fullName||'')}"><b>${escapeHtml(s.fullName||'Estudiante sin nombre')}</b>${s.course?`<span>${escapeHtml(s.course)}</span>`:''}</div>`).join('');
+  box.style.display='block';
+}
+function selectTeacherStudent(id,name){
+  teacherForm.studentId=id||'';
+  teacherForm.studentName=name||'';
+  teacherForm.touched.student=true;
+  teacherForm.open=false;teacherForm.highlight=-1;
+  const input=el('teacherStudentInput');
+  if(input)input.value=teacherForm.studentName;
+  renderTeacherOptions();syncTeacherPane();
+}
+/* Refresca SOLO lo derivado del estado: valores, errores y disponibilidad
+   del botón. Nunca reconstruye el marcado mientras el docente escribe. */
+function syncTeacherPane(){
+  if(!teacherPaneBuilt)return;
+  const e=teacherErrors();
+  const setErr=(id,msg,show)=>{const n=el(id);if(!n)return;n.textContent=show?msg:'';n.style.display=(show&&msg)?'block':'none';};
+  setErr('teacherStudentError',e.student,teacherForm.touched.student);
+  setErr('teacherSymptomsError',e.symptoms,teacherForm.touched.symptoms);
+  const input=el('teacherStudentInput');
+  if(input)input.setAttribute('aria-invalid',teacherForm.touched.student&&!!e.student?'true':'false');
+  const ta=el('teacherSymptoms');
+  if(ta&&ta.value!==teacherForm.symptoms)ta.value=teacherForm.symptoms;
+  const btn=el('teacherSubmitBtn');
+  if(btn){
+    const blocked=!teacherIsValid()||teacherForm.isSubmitting||!canWrite();
+    btn.disabled=blocked;
+    btn.textContent=teacherForm.isSubmitting?'Enviando…':'Reportar emergencia';
+  }
+  const linked=el('teacherLinkState');
+  if(linked){
+    const st=studentById(teacherForm.studentId);
+    if(st){
+      const crit=[st.allergies&&'Alergias: '+st.allergies,st.chronic&&'Crónicas: '+st.chronic].filter(Boolean).join(' · ');
+      linked.className='alert-note '+(crit?'critical':'clear');
+      linked.textContent=crit?('Ficha enlazada · '+crit):'Ficha enlazada · sin alergias ni condiciones registradas';
+      linked.style.display='block';
+    }else{linked.style.display='none';}
+  }
+}
+function resetTeacherForm(){
+  teacherForm.studentId='';teacherForm.studentName='';teacherForm.location='';teacherForm.symptoms='';
+  teacherForm.isSubmitting=false;teacherForm.touched={student:false,symptoms:false};
+  teacherForm.open=false;teacherForm.highlight=-1;
+  ['teacherStudentInput','teacherLocation','teacherSymptoms'].forEach(id=>{const n=el(id);if(n)n.value='';});
+  renderTeacherOptions();syncTeacherPane();
+}
+async function submitTeacherPane(){
+  teacherForm.touched={student:true,symptoms:true};
+  syncTeacherPane();
+  if(!teacherIsValid()||teacherForm.isSubmitting)return;
+  if(!guardWrite())return;
+  teacherForm.isSubmitting=true;syncTeacherPane();
+  try{
+    await window.submitTeacherAlert({
+      studentId:teacherForm.studentId,
+      studentName:teacherForm.studentName,
+      location:teacherForm.location.trim()||'Ubicación sin registrar',
+      symptoms:teacherForm.symptoms.trim(),
+      valid:true
+    });
+    resetTeacherForm();   /* D — limpieza solo tras un envío procesado */
+  }catch(err){
+    console.error('Alerta docente:',err);
+    showToast('No se pudo reportar','La alerta no pudo procesarse. Revisa la conexión e inténtalo de nuevo.');
+  }finally{
+    teacherForm.isSubmitting=false;syncTeacherPane();
+  }
+}
+function renderTeacherPane(){
+  const host=el('role-docente');
+  if(!host)return;
+  if(teacherPaneBuilt){renderTeacherOptions();syncTeacherPane();return;}
+  host.innerHTML=`<div class="grid"><article class="card">
+    <div class="role-title"><div class="avatar">👩‍🏫</div><div><h3>Vista docente</h3><p>Reporta un incidente del aula sin perder tiempo.</p></div></div>
+    <div class="field">
+      <label for="teacherStudentInput">Estudiante</label>
+      <div class="combo">
+        <input id="teacherStudentInput" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="teacherStudentOptions" autocomplete="off" placeholder="Buscar o seleccionar estudiante...">
+        <div class="combo-list" id="teacherStudentOptions" role="listbox" aria-label="Estudiantes de la institución" style="display:none"></div>
+      </div>
+      <p class="field-error" id="teacherStudentError" role="alert" style="display:none"></p>
+    </div>
+    <div class="alert-note" id="teacherLinkState" style="display:none"></div>
+    <div class="field">
+      <label for="teacherLocation">Ubicación <span style="font-weight:600;text-transform:none;letter-spacing:0">(opcional)</span></label>
+      <input id="teacherLocation" placeholder="Ej. Aula 6B · 2° piso">
+    </div>
+    <div class="field">
+      <label for="teacherSymptoms">Síntomas observados</label>
+      <textarea id="teacherSymptoms" placeholder="Describe los síntomas o el motivo del incidente..."></textarea>
+      <p class="field-error" id="teacherSymptomsError" role="alert" style="display:none"></p>
+    </div>
+    <button type="button" class="btn primary" id="teacherSubmitBtn" disabled>Reportar emergencia</button>
+  </article><article class="card"><h3>Estado de alerta</h3><br>
+    <p style="color:#71819b;line-height:1.5">Al reportar, el departamento médico recibe la notificación y el caso pasa al centro de alertas con la ficha del estudiante ya enlazada.</p>
+  </article></div>`;
+
+  const input=el('teacherStudentInput');
+  input.addEventListener('input',()=>{
+    teacherForm.studentName=input.value;
+    teacherForm.studentId='';      /* escribir invalida la selección previa */
+    teacherForm.open=true;teacherForm.highlight=-1;
+    renderTeacherOptions();syncTeacherPane();
+  });
+  input.addEventListener('focus',()=>{teacherForm.open=true;renderTeacherOptions();});
+  input.addEventListener('blur',()=>{
+    /* retardo: permite que el clic en una opción se registre antes de cerrar */
+    setTimeout(()=>{teacherForm.touched.student=true;teacherForm.open=false;renderTeacherOptions();syncTeacherPane();},160);
+  });
+  input.addEventListener('keydown',ev=>{
+    const items=teacherMatches();
+    if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){
+      ev.preventDefault();teacherForm.open=true;
+      const d=ev.key==='ArrowDown'?1:-1;
+      teacherForm.highlight=Math.max(0,Math.min(items.length-1,teacherForm.highlight+d));
+      renderTeacherOptions();
+    }else if(ev.key==='Enter'&&teacherForm.open&&items[teacherForm.highlight]){
+      ev.preventDefault();
+      const s=items[teacherForm.highlight];
+      selectTeacherStudent(s.id,s.fullName);
+    }else if(ev.key==='Escape'){teacherForm.open=false;renderTeacherOptions();}
+  });
+  el('teacherStudentOptions').addEventListener('mousedown',ev=>{
+    const opt=ev.target.closest('.combo-option');
+    if(opt)selectTeacherStudent(opt.dataset.id,opt.dataset.name);
+  });
+  el('teacherLocation').addEventListener('input',ev=>{teacherForm.location=ev.target.value;});
+  const ta=el('teacherSymptoms');
+  ta.addEventListener('input',()=>{teacherForm.symptoms=ta.value;syncTeacherPane();});
+  ta.addEventListener('blur',()=>{teacherForm.touched.symptoms=true;syncTeacherPane();});
+  el('teacherSubmitBtn').addEventListener('click',submitTeacherPane);
+
+  teacherPaneBuilt=true;
+  syncTeacherPane();
+}
 function renderRoles(){el('role-medico').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">MG</div><div><h3>Panel médico de atención</h3><p>Desde aquí se consulta Ficha Médica, Registra Atención, Revisa Riesgo, Vacunas e Inventario.</p></div></div><div class="actions"><button type="button" class="btn secondary" onclick="openFichaModal()">Ver ficha médica</button><button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button><button type="button" class="btn secondary" onclick="showPage('riesgo')">Revisar riesgo</button><button type="button" class="btn secondary" onclick="showPage('vacunas')">Control de vacunas</button><button type="button" class="btn secondary" onclick="showPage('inventario')">Medicamentos disponibles</button></div></article><article class="card"><div class="section-head"><h3>Flujo clínico</h3><span class="badge green">Activo</span></div><div class="feed">${state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}</div></article></div>`;
-el('role-docente').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">LC</div><div><h3>Vista docente</h3><p>Registra un incidente desde el aula sin perder tiempo.</p></div></div><div class="field"><label for="roleDocenteStudent">Estudiante</label><input id="roleDocenteStudent" value="Sofía Martínez"></div><div class="field"><label for="roleDocenteSymptoms">Síntomas observados</label><textarea id="roleDocenteSymptoms">Mareo, náuseas y dolor abdominal durante la clase.</textarea></div><button type="button" class="btn primary" onclick="openReportModal()">Reportar emergencia</button></article><article class="card"><h3>Estado de alerta</h3><br><p style="color:#71819b">Al reportar la emergencia, el departamento médico recibirá la notificación y el caso pasará al centro de alertas.</p></article></div>`;
+renderTeacherPane();
 el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
 el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="green">${state.familyRead?'96%':'94%'}</strong><em>actualizado</em></div><div class="kpi"><small>Casos críticos</small><strong class="red">2</strong><em class="red">seguimiento</em></div><div class="kpi"><small>Respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div></div><div class="card"><h3>Trazabilidad del caso Sofía Martínez</h3><br><table class="table"><tr><th>Momento</th><th>Acción</th><th>Responsable</th></tr><tr><td>10:24</td><td>Alerta reportada</td><td>Docente</td></tr><tr><td>10:25</td><td>Ficha consultada</td><td>Departamento médico</td></tr><tr><td>10:27</td><td>Familia notificada</td><td>Novimed</td></tr><tr><td>10:29</td><td>${state.familyRead?'Lectura confirmada':'Lectura pendiente'}</td><td>Familia</td></tr></table></div>`}
 
@@ -892,9 +1069,18 @@ window.novimedReadAlertForm=function(){
   };
 };function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){
   if(!guardWrite())return;closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
-function submitTeacherAlert(){
+/**
+ * @typedef {Object} AlertPayload
+ * @property {string|null} studentId   Clave foránea a schools/{id}/students. null = sin ficha enlazada.
+ * @property {string}      studentName Nombre desnormalizado, solo para lectura.
+ * @property {string}      location    Ubicación del incidente.
+ * @property {string}      symptoms    Síntomas observados.
+ * @property {boolean}     valid       Cumple las validaciones mínimas de envío.
+ */
+/** @param {AlertPayload=} payload Si se omite, se lee del modal. */
+function submitTeacherAlert(payload){
   if(!guardWrite())return;
-  const form=window.novimedReadAlertForm();
+  const form=payload||window.novimedReadAlertForm();
   if(!form.valid){showToast('Estudiante requerido','Selecciona un estudiante de la matrícula o escribe el nombre si no está registrado.');return;}
   /* Sin campo `allergy`: las alergias se derivan de la ficha por studentId
      en tiempo de render. Nunca se copian ni se asumen. */
@@ -1061,5 +1247,6 @@ window.novimedConfirmFamilyReadLocal = confirmFamilyRead;
   ['setBodyArea',setBodyArea],
   ['expandTable',expandTable],['loadOlderFor',loadOlderFor],['openEditStudentModal',openEditStudentModal],
   ['archiveStudent',archiveStudent],['exportCareCSV',exportCareCSV],['exportStudentsCSV',exportStudentsCSV],
-  ['openFichaModalById',openFichaModalById],['toggleArchivedStudents',toggleArchivedStudents]
+  ['openFichaModalById',openFichaModalById],['toggleArchivedStudents',toggleArchivedStudents],
+  ['submitTeacherPane',submitTeacherPane],['resetTeacherForm',resetTeacherForm]
 ].forEach(([name,fn])=>{ if(typeof fn==='function') window[name]=window[name]||fn; });

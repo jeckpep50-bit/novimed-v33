@@ -1123,3 +1123,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .alert-note.unlinked{background:linear-gradient(135deg,#f5f7fa,#fbfcfe);border-color:#cfd9e6;color:#44546b;font-weight:800}
 .field-hint{margin-top:8px;font-size:12px;line-height:1.45;color:#8a5b00;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:9px 11px;font-weight:700}
 .row-archived td{opacity:.62}
+
+
+/* ============================================================
+   V41.1 — COMBOBOX DE ESTUDIANTE (Vista docente) y errores inline
+   Objetivos táctiles de 44px y foco visible: el docente lo usa en iPad
+   y bajo presión.
+   ============================================================ */
+.combo{position:relative}
+.combo-list{position:absolute;z-index:40;left:0;right:0;top:calc(100% + 6px);background:#fff;border:1px solid #dce7f2;border-radius:16px;box-shadow:0 18px 46px rgba(15,35,70,.14);max-height:264px;overflow-y:auto;padding:6px}
+.combo-option{display:flex;flex-direction:column;gap:2px;min-height:44px;justify-content:center;padding:9px 12px;border-radius:12px;cursor:pointer}
+.combo-option b{font-size:14px;color:#14223b}
+.combo-option span{font-size:12px;color:#71819b}
+.combo-option:hover,.combo-option.active{background:#eef6ff}
+.combo-empty{padding:14px 12px;font-size:13px;color:#71819b}
+.field-error{margin-top:8px;font-size:12.5px;font-weight:800;line-height:1.4;color:#b02a1e}
+.field input[aria-invalid="true"]{border-color:#e5786c;box-shadow:0 0 0 4px rgba(220,38,38,.10)}
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
