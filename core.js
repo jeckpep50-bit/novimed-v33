@@ -1,3 +1,7 @@
+/* V42.1 — A4. La purga del almacenamiento local vive en su propio módulo
+   para poder probarla en Node sin navegador (ver local-purge.test.mjs). */
+import { purgeNovimedStorage, countPendingOps } from './local-purge.js';
+
 const state={
   role:'medico',
   alertSent:false,
@@ -54,7 +58,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V42.0.2';
+const NOVIMED_VERSION='V42.1.0';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -174,6 +178,26 @@ function sessionRole(){return currentSession.role}
 function canWrite(){return sessionRole()!=='Consulta'}
 window.novimedCanWrite=canWrite;
 window.novimedStudentById=studentById;
+/* V42.1 — A4. sync.js controla el ciclo de sesión; core.js es dueño del
+   almacenamiento local. Se expone aquí para que el cierre de sesión pueda
+   purgar sin que sync tenga que conocer los nombres de las claves. */
+window.novimedPurgeLocalData=function(opts){
+  const report=purgeNovimedStorage(typeof localStorage!=='undefined'?localStorage:null,opts||{});
+  /* El estado en memoria también se vacía: si no, el siguiente render
+     volvería a persistir en disco lo que acabamos de borrar. */
+  if(!opts||!opts.keepMemory){
+    PERSISTED_KEYS.forEach(k=>{ if(Array.isArray(state[k])) state[k]=[]; });
+    state.activities=[];
+    state.alerts=undefined;
+    state.careSaved=false;
+    state.familyRead=false;
+    state.selectedStudentIndex=0;
+  }
+  return report;
+};
+window.novimedPendingOpsCount=function(){
+  return countPendingOps(typeof localStorage!=='undefined'?localStorage:null);
+};
 function guardWrite(){
   if(canWrite())return true;
   showToast('Solo lectura','Tu rol (Consulta) permite revisar la información, no modificarla.');

@@ -1,13 +1,14 @@
 {
   "name": "novimed",
   "private": true,
-  "version": "42.0.2",
+  "version": "42.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npm run test:rules && npm run test:smoke",
+    "test": "npm run test:purge && npm run test:rules && npm run test:smoke",
+    "test:purge": "node --test local-purge.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-novimed \"node --test firestore.rules.test.mjs\"",
     "test:smoke": "firebase emulators:exec --project demo-novimed \"node smoke-test.mjs\"",
     "test:browsers": "playwright install chromium"

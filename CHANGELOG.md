@@ -1,5 +1,63 @@
 # NOVIMED — Changelog
 
+## V42.1.0 — A4: los datos clínicos no sobreviven al cierre de sesión
+
+Cierra el bloqueante legal identificado en la auditoría 360. Hasta V42.0.2,
+`novimedLogout` solo llamaba a `signOut()`: todo lo que la app había escrito
+en `localStorage` permanecía en el dispositivo indefinidamente.
+
+En un iPad compartido de enfermería —el escenario real de Novimed— eso
+significaba que las fichas completas de menores (alergias, condiciones
+crónicas, teléfonos de contacto), las atenciones, las vacunas y el inventario
+de una institución quedaban en el equipo después de que su responsable cerraba
+sesión. Bajo la LOPDP ecuatoriana es tratamiento de datos sensibles sin base
+de conservación.
+
+**Nuevo módulo `local-purge.js`**
+Puro y sin dependencias del navegador: recibe el almacén por argumento, lo que
+permite probarlo en Node. Purga por prefijo SIN número de versión, para
+llevarse también los esquemas antiguos (`v1`) que quedaron de migraciones.
+
+**Los dos almacenes no se tratan igual — y esa es la decisión de fondo**
+- `novimed_local_state_v*` es una **caché de lectura**, reconstruible entera
+  desde Firestore. Se borra siempre.
+- `novimed_pending_ops_v*` es la **única copia** de escrituras clínicas que
+  todavía no llegaron al servidor. Borrarla a ciegas destruiría registros que
+  nadie más tiene — un daño peor que el que se quiere evitar.
+
+**Cierre voluntario** (`novimedLogout`): si hay operaciones pendientes, primero
+intenta enviarlas; si algo queda, dice cuántos registros son y que son la única
+copia, y pide confirmación explícita. Solo entonces purga todo. La purga ocurre
+ANTES del `signOut()`: si fuera después y el `signOut` fallara sin red, el
+usuario se quedaría con la sesión abierta creyendo que los datos ya no están.
+
+**Cierre involuntario** (token caducado, credenciales revocadas, cuenta
+deshabilitada): se purga la caché igual, pero se **conserva la cola**
+(`keepQueue: true`). Ahí no hubo oportunidad de advertir a nadie, y perder
+trabajo clínico en silencio por una expiración de token sería inaceptable. Se
+subirá al volver a entrar.
+
+**Estado en memoria**: también se vacía. Sin eso, el siguiente `renderAll()`
+volvería a persistir en disco justo lo que se acaba de borrar.
+
+**13 pruebas nuevas** (`npm run test:purge`, sin emulador ni navegador) que
+verifican las tres decisiones de diseño: la caché siempre desaparece; la cola
+con trabajo no desaparece sin advertencia; y nada ajeno a Novimed se toca. Se
+cubren los tenants múltiples del mismo equipo, los esquemas antiguos, la cola
+corrupta, la doble purga y Safari en modo privado. `npm test` las ejecuta
+primero, porque son las únicas que corren sin infraestructura.
+
+**También corregido — A3, mismo ciclo de sesión**
+`setInterval(processQueue, 25000)` se creaba a nivel de módulo y no se detenía
+nunca: tras cerrar sesión seguía disparando cada 25 segundos contra
+`SCHOOL_ID = null`. Ahora se ata al ciclo de sesión, como los listeners de
+Firestore: `startQueueTimer()` al entrar, `stopQueueTimer()` al salir.
+
+**Consecuencia asumida**: la caché ya no sobrevive entre sesiones, así que el
+primer arranque tras iniciar sesión necesita red. Es el precio correcto: en un
+dispositivo compartido, la historia clínica de un menor no debe seguir ahí
+cuando la sesión ya no existe.
+
 ## V42.0.1 — Hotfix de verdad clínica, navegación y reglas
 
 Corrige defectos que sobrevivieron a las barridas de V40.1 y V41 y que solo

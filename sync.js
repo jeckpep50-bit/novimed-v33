@@ -305,7 +305,19 @@ async function processQueue(trigger, force){
 }
 window.novimedProcessQueueNow = (force) => processQueue("manual", force === true);
 window.novimedQueueSnapshot = () => pendingOps.map(o => ({ type: o.type, attempts: o.attempts, status: o.status }));
-setInterval(() => processQueue("interval"), 25000);
+/* V42.1 — A3. El intervalo se creaba a nivel de módulo y nunca se detenía:
+   tras cerrar sesión seguía disparando cada 25 s contra SCHOOL_ID = null.
+   Ahora se ata al ciclo de sesión, como los listeners de Firestore. */
+let queueTimer = null;
+function startQueueTimer(){
+  if(queueTimer) return;
+  queueTimer = setInterval(() => processQueue("interval"), 25000);
+}
+function stopQueueTimer(){
+  if(!queueTimer) return;
+  clearInterval(queueTimer);
+  queueTimer = null;
+}
 window.addEventListener("online", () => processQueue("online"));
 
 
@@ -986,7 +998,36 @@ function doDemoLogin(){
   if(db2) db2.addEventListener("click", doDemoLogin);
   if(pw) pw.addEventListener("keydown", e => { if(e.key === "Enter") doEmailLogin(); });
 })();
-window.novimedLogout = function(){
+/* V42.1 — A4. Cerrar sesión ya no es solo signOut(): tiene que llevarse los
+   datos clínicos del dispositivo. Pero la cola offline es la ÚNICA copia de
+   las escrituras que aún no llegaron al servidor, así que antes de destruirla
+   se intenta enviarla y, si algo queda, se dice exactamente qué se va a
+   perder y se pide confirmación. Nunca se borra trabajo en silencio. */
+window.novimedLogout = async function(){
+  const pendientes = () => (window.novimedPendingOpsCount ? window.novimedPendingOpsCount() : 0);
+
+  if(pendientes() > 0){
+    uiNotify("Enviando lo pendiente", "Hay registros sin subir. Se están enviando antes de cerrar la sesión.");
+    try{ await processQueue("logout", true); }catch(e){ console.error("Cola al cerrar sesión:", e); }
+  }
+
+  const restantes = pendientes();
+  if(restantes > 0){
+    const msg = restantes === 1
+      ? "Queda 1 registro sin subir a la nube. Si cierras la sesión ahora se perderá: es la única copia que existe.\n\n¿Cerrar sesión de todos modos?"
+      : "Quedan " + restantes + " registros sin subir a la nube. Si cierras la sesión ahora se perderán: son la única copia que existe.\n\n¿Cerrar sesión de todos modos?";
+    if(!window.confirm(msg)){
+      uiNotify("Sesión activa", "No se cerró la sesión. Conéctate a una red para que se suban los registros pendientes.");
+      return;
+    }
+  }
+
+  /* La purga se hace ANTES del signOut. Si se hiciera después y el signOut
+     fallara (sin red), el usuario se quedaría con la sesión abierta creyendo
+     que los datos ya no están en el equipo. */
+  try{ window.novimedPurgeLocalData?.({ keepQueue: false }); }
+  catch(e){ console.error("Purga local:", e); }
+
   signOut(auth).catch(err => uiNotify("No se pudo cerrar sesión", err.code || "error"));
 };
 
@@ -998,6 +1039,18 @@ onAuthStateChanged(auth, async (user) => {
     setIdentity(null);
     linkedCareRecordId = null;
     teardownListeners();
+    stopQueueTimer();
+    /* V42.1 — A4. Este punto cubre TAMBIÉN las salidas involuntarias: token
+       caducado, credenciales revocadas, cuenta deshabilitada. Ahí no hubo
+       oportunidad de advertir a nadie, así que se conserva la cola
+       (`keepQueue: true`): la caché de fichas —que es el grueso de la
+       exposición— desaparece igual, pero no se destruyen en silencio
+       registros clínicos que nadie más tiene. Se subirán al volver a entrar.
+       En el cierre voluntario (novimedLogout) sí se purga todo, porque allí
+       el usuario fue advertido y lo confirmó. */
+    try{ window.novimedPurgeLocalData?.({ keepQueue: true }); }
+    catch(e){ console.error("Purga local al cerrar sesión:", e); }
+    try{ window.novimedRenderAll?.(); }catch(e){/* noop */}
     window.novimedSyncStatus = "Sesión cerrada";
     gateBusy(false); gateError("");
     gateShow();
@@ -1029,6 +1082,7 @@ onAuthStateChanged(auth, async (user) => {
   window.novimedSyncStatus = "Conectando…";
 
   loadTenantQueue();
+  startQueueTimer();   /* V42.1 — A3: el temporizador vive mientras viva la sesión */
   if(typeof window.novimedActivateTenant === "function"){
     window.novimedActivateTenant(SCHOOL_ID, { role, email: user.email || null, anonymous: user.isAnonymous });
   }
