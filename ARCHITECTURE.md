@@ -37,6 +37,7 @@ Raíz multi-tenant: `schools/{SCHOOL_ID}/…` (V37: `SCHOOL_ID` constante `eight
 | `inventory` | ítem | name, category, stock (número), min, expires, `createdAt` | asc |
 | `inventoryLog` | movimiento (auditoría) | time, name, qty, student, context, `createdAt` | desc |
 | `vaccines` | registro | student, course, age, reference, status, next, `createdAt` | asc |
+| `erasureLog/{studentId}` (V42, ver CHANGELOG) | prueba permanente de una solicitud de eliminación (LOPDP) | studentId, reason, `createdBy`, `createdAt` | — |
 | `meta/seed`, `meta/seed-alerts` | banderas de siembra (transaccionales) | seededAt, version | — |
 | `schools/{id}/meta/active-case` (V38; antes cases/active-alert, hoy huérfano) | foco operativo efímero del dashboard | status, studentName, alertId, familyRead, … | — |
 

@@ -74,8 +74,9 @@ sigue funcionando salvo el borrado en duro, que es justo lo que se bloquea.
 ### 7.1 Publicar reglas (Bloqueante ①)
 Desde Firebase Console (funciona en iPad, no requiere CLI):
 1. Firebase → Firestore → **Rules** → copiar íntegro `firestore.rules` del repositorio.
-2. **Antes de Publicar**, usar el *Rules Playground* con tres simulaciones:
-   - `delete` sobre `schools/eight-demo/students/{cualquiera}` → debe **denegar**.
+2. **Antes de Publicar**, usar el *Rules Playground* con cuatro simulaciones:
+   - `delete` sobre `schools/eight-demo/students/{cualquiera}` autenticado como `Personal_Salud` o `Admin_Colegio` → debe **denegar**.
+   - `delete` sobre `schools/eight-demo/students/{cualquiera}` autenticado como `SuperAdmin` **sin** que exista antes `schools/eight-demo/erasureLog/{ese id}` → debe **denegar** (derecho de eliminación: solo con el motivo ya registrado, ver `firestore.rules` §"REGISTRO DE ELIMINACIÓN").
    - `create` en `careRecords` con `createdBy.uid` distinto del uid autenticado → debe **denegar**.
    - `update` de archivado con `archivedReason` vacío → debe **denegar**.
 3. Publicar. Guardar copia del texto anterior por si hay que revertir.

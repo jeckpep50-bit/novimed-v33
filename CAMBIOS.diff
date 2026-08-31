@@ -1,0 +1,136 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 16c9643..eadebb7 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -5,9 +5,9 @@
+ Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta es la fase 1, sin riesgo por diseño: se sigue escribiendo en `active-case` igual que antes).
+ 
+ - **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
+-- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `scripts/smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
++- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+ - Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
+-- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `tests/firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `scripts/smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
++- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+ 
+ ## V41.1 — Vista Docente: formulario real
+ 
+diff --git a/PLAN_DE_TRABAJO.md b/PLAN_DE_TRABAJO.md
+index a898281..576e8cc 100644
+--- a/PLAN_DE_TRABAJO.md
++++ b/PLAN_DE_TRABAJO.md
+@@ -54,7 +54,7 @@ Ya diseñada completa en `ROADMAP_V42.md`. Resumen de la secuencia (cada entrega
+ 
+ El propio roadmap recomienda **adelantar aquí las pruebas mínimas de la Fase 2** (`calculateRisk`, `inventoryStatus`, reglas en el emulador de Firestore) antes de tocar el núcleo del panel — es la parte de V44 con mayor retorno por hora invertida, y evita repetir el patrón que generó los defectos C1/C2/C5. Se adopta esa recomendación: **Fase 1 empieza con un arnés de pruebas mínimo, no con código de producto.**
+ 
+-**Estado:** arnés de pruebas construido (`tests/firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `scripts/smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
++**Estado:** arnés de pruebas construido (`firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
+ 
+ ### Fase 2 — V43: lo que queda de la auditoría original
+ - A3: decidir Riesgo y Vacunas (completarlos o retirarlos — hoy están muertos en producción, y un módulo muerto en un producto que se vende es peor que no tenerlo).
+diff --git a/ROADMAP_V42.md b/ROADMAP_V42.md
+index d136dcb..5e1e895 100644
+--- a/ROADMAP_V42.md
++++ b/ROADMAP_V42.md
+@@ -49,7 +49,7 @@ La app empieza a **leer** de `alerts` y sigue **escribiendo** en `active-case`.
+ - Nuevo estado: `state.activeAlertId` (la alerta enfocada) y `state.pendingAlerts` (derivado de `state.alerts`).
+ - Implementado como una fuente **doble**, no como reemplazo: `mapFirestoreToLocalState()` (sync.js) sigue aportando la señal inmediata al iniciar sesión, y `applyQueueDerivedFocus()` (core.js, nueva, corre al inicio de cada `renderAll()`) resuelve desde `state.alerts` por `activeAlertId` con fallback a la `pending` más reciente, y GANA cuando resuelve. `activeAlert()` en sí no cambió de firma — sigue leyendo `state.currentAlert` — pero ese campo ahora lo mantienen ambas fuentes, no solo el documento. Se descubrió en la práctica que la versión "solo cola, sin fuente inmediata" dejaba un parpadeo a neutro entre el primer snapshot del caso y la conexión del listener de `alerts`; de ahí el diseño final.
+ - `renderAll()` deriva héroe y banderas (`alertSent`/`careSaved`/`familyRead`) de la cola cuando resuelve; el KPI de alertas (`kpiAlerts`) ya las derivaba de `state.alerts` desde antes de V42.
+-- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `scripts/smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
++- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
+ 
+ ### V42.1 — Corte de escritura
+ Se deja de escribir en `active-case` y se elimina el código muerto.
+diff --git a/VERIFICACION_FASE0.md b/VERIFICACION_FASE0.md
+index 358042c..49421ae 100644
+--- a/VERIFICACION_FASE0.md
++++ b/VERIFICACION_FASE0.md
+@@ -11,7 +11,7 @@ Antes de ejecutar los pasos manuales del RUNBOOK (`RUNBOOK.md §7`, que requiere
+ 
+ ## 3. Reglas vs. código, probado contra el emulador de Firestore (no a ojo)
+ 
+-Se añadió `tests/firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
++Se añadió `firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
+ 
+ Cubre:
+ - **Las 3 simulaciones que `RUNBOOK.md §7.1` exige correr en el Rules Playground** antes de publicar (`delete` sobre `students` → deniega; `create` en `careRecords` con `createdBy.uid` ajeno → deniega; archivado con `archivedReason` vacío → deniega), ahora automatizadas y repetibles en cada cambio de reglas.
+diff --git a/package.json b/package.json
+index 63f68e1..c6bd632 100644
+--- a/package.json
++++ b/package.json
+@@ -7,8 +7,10 @@
+     "dev": "vite",
+     "build": "vite build",
+     "preview": "vite preview",
+-    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test tests/firestore.rules.test.mjs\"",
+-    "test:smoke": "firebase emulators:exec --project demo-novimed \"node scripts/smoke-test.mjs\""
++    "test": "npm run test:rules && npm run test:smoke",
++    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test firestore.rules.test.mjs\"",
++    "test:smoke": "firebase emulators:exec --project demo-novimed \"node smoke-test.mjs\"",
++    "test:browsers": "playwright install chromium"
+   },
+   "dependencies": {
+     "firebase": "^12.0.0"
+diff --git a/smoke-test.mjs b/smoke-test.mjs
+index 263edda..fcd4ec2 100644
+--- a/smoke-test.mjs
++++ b/smoke-test.mjs
+@@ -6,7 +6,7 @@
+  * (activado por firebase.json + sync.js) y usa firebase-admin apuntado a
+  * los emuladores (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST)
+  * para sembrar datos de prueba. Pensado para correr dentro de
+- * `firebase emulators:exec "node scripts/smoke-test.mjs"` (ver
++ * `firebase emulators:exec "node smoke-test.mjs"` (ver
+  * package.json → test:smoke), que levanta y apaga los emuladores solo.
+  *
+  * Dos escenarios:
+@@ -20,8 +20,16 @@
+  *     del documento único.
+  */
+ import { spawn, execSync } from "node:child_process";
++import { mkdirSync } from "node:fs";
+ import { chromium } from "playwright";
+ 
++/* Las capturas iban a `scripts/`, un directorio que no existe en el repo:
++   page.screenshot() lanzaba ENOENT y abortaba la corrida DESPUÉS de que el
++   escenario ya había pasado. Se escribe en un directorio propio que el
++   test crea, para que la salida no dependa del layout del repositorio. */
++const SHOT_DIR = "smoke-out";
++mkdirSync(SHOT_DIR, { recursive: true });
++
+ const PORT = 5183;
+ const BASE_URL = `http://127.0.0.1:${PORT}`;
+ const PROJECT_ID = "demo-novimed";
+@@ -169,7 +177,14 @@ async function main() {
+     // (browserRef se enlaza justo después de lanzar Chromium, más abajo)
+     await waitForServer(BASE_URL, 20000);
+     console.log("→ vite listo. Abriendo Chromium…");
+-    browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
++    /* Sin PLAYWRIGHT_CHROMIUM_PATH se usa el Chromium que gestiona la propia
++       Playwright (`npm run test:browsers`), que es lo que funciona en un
++       equipo normal y en CI. La variable existe solo para entornos donde el
++       binario vive fuera de la caché de Playwright: fijar una ruta absoluta
++       en el código hacía que este test solo pudiera correr en la máquina
++       donde se escribió. */
++    const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
++    browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {});
+     browserRef = browser;
+ 
+     // Contextos separados por escenario: son "dos dispositivos distintos"
+@@ -192,7 +207,7 @@ async function main() {
+     );
+     const demoHero = await demoPage.textContent("#mainStudentName");
+     const demoKpi = await demoPage.textContent("#kpiAlerts");
+-    await demoPage.screenshot({ path: "scripts/smoke-demo.png", fullPage: true });
++    await demoPage.screenshot({ path: `${SHOT_DIR}/smoke-demo.png`, fullPage: true });
+     console.log(`  [demo] mainStudentName="${demoHero}" kpiAlerts="${demoKpi}"`);
+     await demoPage.close();
+     await demoCtx.close();
+@@ -274,7 +289,7 @@ async function main() {
+     }
+     const afterHero = await realPage.textContent("#mainStudentName");
+     const afterMeta = await realPage.textContent("#mainStudentMeta");
+-    await realPage.screenshot({ path: "scripts/smoke-real-after-delete.png", fullPage: true });
++    await realPage.screenshot({ path: `${SHOT_DIR}/smoke-real-after-delete.png`, fullPage: true });
+     console.log(`  [real] Sin active-case, tras recarga → mainStudentName="${afterHero}" mainStudentMeta="${afterMeta}"`);
+     await realPage.close();
+     await realCtx.close();

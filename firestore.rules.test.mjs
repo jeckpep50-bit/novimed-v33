@@ -58,7 +58,7 @@ async function seed(schoolId, path, data) {
 
 // ─── RUNBOOK.md §7.1 — las 3 simulaciones obligatorias antes de publicar ───
 
-test("RUNBOOK 1/3: delete sobre students siempre se deniega", async () => {
+test("RUNBOOK 1/3: delete sobre students se deniega para roles que no son SuperAdmin", async () => {
   await seed(SCHOOL_A, "students/stu1", { fullName: "Ana", createdBy: { uid: "health1" } });
   const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
   await assertFails(deleteDoc(doc(db, `schools/${SCHOOL_A}/students/stu1`)));
@@ -234,6 +234,132 @@ test("createdAt más de 5 minutos en el futuro se deniega (sanePastTimestamp)", 
 test("una colección no declarada se deniega por defecto", async () => {
   const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
   await assertFails(getDoc(doc(db, `schools/${SCHOOL_A}/coleccionNueva/doc1`)));
+});
+
+// ─── Derecho de eliminación (LOPDP) — solo SuperAdmin, solo con motivo ────
+
+test("erasureLog: Personal_Salud no puede crear un registro de eliminación", async () => {
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuX`), {
+      studentId: "stuX",
+      reason: "Solicitud de un padre por correo",
+      createdAt: Date.now(),
+      createdBy: { uid: "health1" }
+    })
+  );
+});
+
+test("erasureLog: Admin_Colegio tampoco puede crearlo (solo SuperAdmin)", async () => {
+  const db = ctx("admin1", { role: "Admin_Colegio", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuX`), {
+      studentId: "stuX",
+      reason: "Solicitud de un padre por correo",
+      createdAt: Date.now(),
+      createdBy: { uid: "admin1" }
+    })
+  );
+});
+
+test("erasureLog: SuperAdmin no puede registrar con un motivo demasiado corto", async () => {
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuX`), {
+      studentId: "stuX",
+      reason: "corto",
+      createdAt: Date.now(),
+      createdBy: { uid: "super1" }
+    })
+  );
+});
+
+test("erasureLog: SuperAdmin no puede registrar con el ID del documento distinto de studentId", async () => {
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuX`), {
+      studentId: "otro-estudiante",
+      reason: "Solicitud de eliminación de la madre, verificada por dirección",
+      createdAt: Date.now(),
+      createdBy: { uid: "super1" }
+    })
+  );
+});
+
+test("erasureLog: SuperAdmin sí puede registrar un motivo válido", async () => {
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertSucceeds(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuX`), {
+      studentId: "stuX",
+      reason: "Solicitud de eliminación de la madre, verificada por dirección",
+      createdAt: Date.now(),
+      createdBy: { uid: "super1" }
+    })
+  );
+});
+
+test("erasureLog: es inmutable, ni SuperAdmin puede editarlo o borrarlo", async () => {
+  await seed(SCHOOL_A, "erasureLog/stuY", {
+    studentId: "stuY",
+    reason: "Solicitud de eliminación del padre, verificada por dirección",
+    createdAt: Date.now(),
+    createdBy: { uid: "super1" }
+  });
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertFails(updateDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuY`), { reason: "otro motivo, igual de largo que el anterior" }));
+  await assertFails(deleteDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuY`)));
+});
+
+test("SuperAdmin NO puede borrar una ficha sin erasureLog previo para ese estudiante", async () => {
+  await seed(SCHOOL_A, "students/stuZ", { fullName: "Sin registro de eliminación", createdBy: { uid: "health1" } });
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertFails(deleteDoc(doc(db, `schools/${SCHOOL_A}/students/stuZ`)));
+});
+
+test("SuperAdmin SÍ puede borrar una ficha una vez registrado el motivo en erasureLog", async () => {
+  await seed(SCHOOL_A, "students/stuW", { fullName: "Con registro de eliminación", createdBy: { uid: "health1" } });
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertSucceeds(
+    setDoc(doc(db, `schools/${SCHOOL_A}/erasureLog/stuW`), {
+      studentId: "stuW",
+      reason: "Solicitud de eliminación de la familia, verificada por dirección",
+      createdAt: Date.now(),
+      createdBy: { uid: "super1" }
+    })
+  );
+  await assertSucceeds(deleteDoc(doc(db, `schools/${SCHOOL_A}/students/stuW`)));
+});
+
+test("erasureLog también habilita el borrado de careRecords/alerts/vaccines/inventoryLog del mismo estudiante", async () => {
+  const studentId = "stuV";
+  await seed(SCHOOL_A, `erasureLog/${studentId}`, {
+    studentId,
+    reason: "Solicitud de eliminación de la familia, verificada por dirección",
+    createdAt: Date.now(),
+    createdBy: { uid: "super1" }
+  });
+  await seed(SCHOOL_A, "careRecords/care-stuV", { studentId, createdBy: { uid: "health1" }, createdAt: 1000 });
+  await seed(SCHOOL_A, "alerts/alert-stuV", { studentId, createdBy: { uid: "health1" }, createdAt: 1000, status: "pending" });
+  await seed(SCHOOL_A, "vaccines/vac-stuV", { studentId, createdBy: { uid: "health1" } });
+  await seed(SCHOOL_A, "inventoryLog/log-stuV", { studentId, createdBy: { uid: "health1" } });
+
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertSucceeds(deleteDoc(doc(db, `schools/${SCHOOL_A}/careRecords/care-stuV`)));
+  await assertSucceeds(deleteDoc(doc(db, `schools/${SCHOOL_A}/alerts/alert-stuV`)));
+  await assertSucceeds(deleteDoc(doc(db, `schools/${SCHOOL_A}/vaccines/vac-stuV`)));
+  await assertSucceeds(deleteDoc(doc(db, `schools/${SCHOOL_A}/inventoryLog/log-stuV`)));
+});
+
+test("un registro huérfano (sin studentId) no se puede borrar aunque haya erasureLogs de otros estudiantes", async () => {
+  await seed(SCHOOL_A, "erasureLog/algun-estudiante", {
+    studentId: "algun-estudiante",
+    reason: "Solicitud de eliminación de la familia, verificada por dirección",
+    createdAt: Date.now(),
+    createdBy: { uid: "super1" }
+  });
+  await seed(SCHOOL_A, "careRecords/care-huerfano", { createdBy: { uid: "health1" }, createdAt: 1000 });
+  const db = ctx("super1", { role: "SuperAdmin", schoolId: SCHOOL_A }).firestore();
+  await assertFails(deleteDoc(doc(db, `schools/${SCHOOL_A}/careRecords/care-huerfano`)));
 });
 
 // ─── Hallazgo del cruce reglas↔código (ver PLAN_DE_TRABAJO.md) ─────────────

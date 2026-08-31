@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test tests/firestore.rules.test.mjs\"",
-    "test:smoke": "firebase emulators:exec --project demo-novimed \"node scripts/smoke-test.mjs\""
+    "test": "npm run test:rules && npm run test:smoke",
+    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test firestore.rules.test.mjs\"",
+    "test:smoke": "firebase emulators:exec --project demo-novimed \"node smoke-test.mjs\"",
+    "test:browsers": "playwright install chromium"
   },
   "dependencies": {
     "firebase": "^12.0.0"

@@ -25,7 +25,7 @@ Ese trabajo técnico es real y hay que terminarlo. Pero "vendible" es un objetiv
 | **Funcional** | Núcleo clínico honesto, multi-tenant aislado, offline robusto, reglas de seguridad versionadas | Cola de alertas real (C4), canal familiar real (C3), pruebas automatizadas, accesibilidad |
 | **Operable** | RUNBOOK con diagnóstico, rollback, App Check, staging documentado | Backup **probado** (no solo programado), staging **montado** (hoy es solo procedimiento) |
 | **Comercial** | Tenant de demo (`eight-demo`) para pitch | Alta de colegio nuevo sin intervención manual en Firestore, modelo de precios, piloto pagado con un colegio real |
-| **Legal** | Postura de "nunca se borra un historial clínico" ya en las reglas | Contrato de encargo de tratamiento de datos, política de privacidad, base legal explícita para datos de salud de menores (Ecuador: LOPDP) |
+| **Legal** | Historial clínico protegido por defecto, y derecho de eliminación con mecanismo técnico (solo SuperAdmin, con motivo registrado de forma permanente) ya en las reglas | Contrato de encargo de tratamiento de datos, política de privacidad, base legal explícita para datos de salud de menores (Ecuador: LOPDP), y el procedimiento humano de verificación de solicitudes de eliminación |
 
 Un producto puede ser técnicamente perfecto y no venderse porque no hay forma de dar de alta a un segundo colegio sin que un desarrollador toque Firestore a mano. Ese punto está en la Fase 4 y es tan bloqueante como C4.
 
@@ -78,7 +78,7 @@ Esta es la fase que falta en el roadmap técnico existente y es la que convierte
 No es opcional para datos de salud de menores:
 - Política de privacidad y términos de servicio.
 - Ecuador tiene Ley Orgánica de Protección de Datos Personales (LOPDP) vigente: el colegio es responsable del tratamiento, Novimed es encargado — eso necesita un contrato (DPA) explícito, no solo buenas intenciones en el código.
-- Definir base legal y consentimiento para el registro de datos clínicos de menores, y el procedimiento ante una eventual solicitud de un padre/tutor de acceso o eliminación de datos (que choca de frente con "un historial clínico nunca se borra" — hay que resolver esa tensión con criterio legal, no técnico).
+- Definir base legal y consentimiento para el registro de datos clínicos de menores. El derecho de eliminación ya tiene mecanismo técnico (`firestore.rules`: solo SuperAdmin, y solo tras registrar el motivo en `erasureLog` — inmutable, sobrevive al borrado de los datos del estudiante como prueba). **Falta lo legal, no lo técnico:** cómo se verifica que quien pide el borrado es realmente el padre/tutor, plazos de respuesta, y si aplica alguna excepción de retención (ej. una atención médica documentada que el colegio deba conservar por normativa sanitaria antes de poder borrarla).
 
 ### Fase 6 — Piloto real
 Un colegio real, idealmente ya conocido, en producción con datos reales durante 2–4 semanas antes de vender a un segundo. Es la validación que 41 versiones de iPad manual no pueden reemplazar: uso real, bajo presión, con datos que importan.
