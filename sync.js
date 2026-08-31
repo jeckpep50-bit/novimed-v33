@@ -801,11 +801,21 @@ window.submitCare = async function(){
   const careStatus = document.getElementById("careStatus")?.value || "En observación";
   const eva = document.getElementById("careEva")?.value || "5 · Moderado";
   const careNote = document.getElementById("careObservations")?.value || document.getElementById("careActionDone")?.value || "Atención médica registrada y familia notificada.";
-  let selectedStudentIndex = parseInt(document.getElementById("careStudent")?.value || window.novimedState?.selectedStudentIndex || 0, 10);
-  if(!Number.isFinite(selectedStudentIndex) || selectedStudentIndex < 0) selectedStudentIndex = 0;
-  const studentDoc = window.novimedState?.students?.[selectedStudentIndex] || null;
-  const selectedStudent = studentDoc?.fullName || "Estudiante sin nombre";
-  const selectedStudentId = studentDoc?.id || null;
+  /* V42.0.2 — M3. Esta es la ruta que escribe a Firestore, así que aquí el
+     bug tenía consecuencia permanente. El value del select era la POSICIÓN
+     en state.students: si un snapshot reordenaba el array mientras se
+     llenaba el formulario, la atención quedaba archivada en el expediente
+     de otro estudiante. Ahora se resuelve por ID, y si no se encuentra se
+     aborta en lugar de caer a students[0]. */
+  const selectedStudentId = document.getElementById("careStudent")?.value || null;
+  const studentDoc = selectedStudentId
+    ? (window.novimedState?.students || []).find(s => s && s.id === selectedStudentId) || null
+    : null;
+  if(!studentDoc){
+    uiNotify("Estudiante no disponible","La ficha seleccionada ya no está activa. Vuelve a elegir al estudiante antes de guardar la atención.");
+    return;
+  }
+  const selectedStudent = studentDoc.fullName || "Estudiante sin nombre";
   const bodyArea = document.getElementById("careBodyArea")?.value || "Sin especificar";
   const symptoms = document.getElementById("careSymptoms")?.value || "Sin especificar";
   const presumptiveDiagnosis = document.getElementById("carePresumptiveDiagnosis")?.value || "Sin especificar";

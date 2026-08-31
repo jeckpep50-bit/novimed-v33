@@ -54,7 +54,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V42.0.1';
+const NOVIMED_VERSION='V42.0.2';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -743,13 +743,27 @@ function parsePositiveInt(value, fallback=0){
   const n=parseInt(value,10);
   return Number.isFinite(n) && n>=0 ? n : fallback;
 }
-function inventoryStatus(item){
-  const exp = new Date(item.expires + 'T00:00:00');
-  const today = new Date();
+/* V42.0.2 — M1. `expires` se guarda como 'Sin registrar' por defecto, así
+   que new Date('Sin registrarT00:00:00') daba Invalid Date, `days` era NaN
+   y TODA comparación con NaN es false: el ítem caía al `return ['green']`
+   final y un medicamento caducado se mostraba como Disponible en el
+   botiquín escolar. Una fecha que no se puede leer no es una fecha válida:
+   se declara como desconocida, no se asume que está bien. */
+function expiryDays(value){
+  const raw=String(value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;   // null = no se sabe
+  const exp=new Date(raw+'T00:00:00');
+  if(Number.isNaN(exp.getTime())) return null;
+  const today=new Date();
   today.setHours(0,0,0,0);
-  const days = Math.ceil((exp - today) / 86400000);
+  return Math.ceil((exp-today)/86400000);
+}
+function inventoryStatus(item){
+  const days = expiryDays(item && item.expires);
   if(item.stock <= item.min) return ['red','Reponer'];
-  if(days <= 90) return ['amber','Caduca pronto'];
+  if(days === null)  return ['amber','Sin fecha de caducidad'];
+  if(days < 0)       return ['red','Caducado'];
+  if(days <= 90)     return ['amber','Caduca pronto'];
   return ['green','Disponible'];
 }
 function renderInventory(){
@@ -757,7 +771,9 @@ function renderInventory(){
   const history=el('inventoryHistory');
   if(!table || !history) return;
   const low=state.inventory.filter(i=>i.stock<=i.min).length;
-  const expiring=state.inventory.filter(i=>{const today=new Date();today.setHours(0,0,0,0);return Math.ceil((new Date(i.expires+'T00:00:00')-today)/86400000)<=90}).length;
+  /* M1 — mismo NaN: los ítems sin fecha legible no se contaban como riesgo.
+     Ahora cuentan, porque no saber si algo caducó ES un riesgo. */
+  const expiring=state.inventory.filter(i=>{const d=expiryDays(i&&i.expires);return d===null||d<=90}).length;
   el('invTotal').textContent=state.inventory.length;
   el('invLow').textContent=low;
   el('invExpire').textContent=expiring;
@@ -1048,13 +1064,25 @@ function _dirTrace(){
 function populateAttentionOptions(){
   const studentSelect=el('careStudent');
   if(studentSelect){
-    studentSelect.innerHTML=(state.students||[]).map((s,i)=>({s,i}))
-      .filter(x=>!x.s.isArchived)
-      .map(({s,i})=>`<option value="${i}" ${i===state.selectedStudentIndex?'selected':''}>${escapeHtml(s.fullName||'Estudiante sin nombre')}</option>`).join('');
+    /* V42.0.2 — M3. El value era la POSICIÓN en state.students. Si llegaba un
+       snapshot de Firestore mientras el médico rellenaba el formulario (otro
+       usuario registra o archiva una ficha), el array se reordenaba y esa
+       posición pasaba a apuntar a OTRO estudiante: la atención se guardaba en
+       el expediente equivocado, en silencio y sin forma de detectarlo después.
+       El identificador del documento no se mueve; la posición sí. */
+    const current=state.students[state.selectedStudentIndex];
+    const selectedId=current&&current.id?current.id:null;
+    studentSelect.innerHTML=(state.students||[])
+      .filter(s=>s&&!s.isArchived&&s.id)
+      .map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===selectedId?'selected':''}>${escapeHtml(s.fullName||'Estudiante sin nombre')}</option>`).join('');
   }
   const medSelect=el('careMedication');
   if(medSelect){
-    medSelect.innerHTML='<option value="">Sin medicamento administrado</option>'+(state.inventory||[]).map((m,i)=>`<option value="${i}">${escapeHtml(m.name)} · stock ${m.stock}</option>`).join('')+'<option value="otro">Otro / no registrado en inventario</option>';
+    /* V42.0.2 — M3-bis. Idéntico defecto que en el selector de estudiante,
+       pero aquí el daño es doble: se descuenta el stock del insumo
+       equivocado Y la ficha clínica registra un medicamento que nunca se
+       administró. Se identifica por ID de documento. */
+    medSelect.innerHTML='<option value="">Sin medicamento administrado</option>'+(state.inventory||[]).filter(m=>m&&m.id).map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} · stock ${m.stock}</option>`).join('')+'<option value="otro">Otro / no registrado en inventario</option>';
   }
 }
 function setBodyArea(area){
@@ -1253,19 +1281,34 @@ function submitTeacherAlert(payload){
 }
 function submitCare(){
   if(!guardWrite())return;
-  let selectedIndex=parseInt(el('careStudent')?.value || state.selectedStudentIndex || 0,10);
-  if(!Number.isFinite(selectedIndex) || selectedIndex<0 || selectedIndex>=state.students.length) selectedIndex=0;
-  const selectedStudent=(state.students&&state.students[selectedIndex])?state.students[selectedIndex]:state.students[0];
-  state.selectedStudentIndex=selectedIndex;
+  /* V42.0.2 — M3. Se resuelve por ID. Si el estudiante elegido ya no está en
+     el estado (lo archivaron mientras se llenaba el formulario), se ABORTA:
+     antes se caía silenciosamente a state.students[0], que es precisamente
+     cómo una atención terminaba en el expediente de otra persona. */
+  const selectedId=el('careStudent')?.value||'';
+  const selectedStudent=selectedId?studentById(selectedId):null;
+  if(!selectedStudent){
+    showToast('Estudiante no disponible','La ficha seleccionada ya no está activa. Vuelve a elegir al estudiante antes de guardar la atención.');
+    populateAttentionOptions();
+    return;
+  }
+  const selectedIndex=state.students.indexOf(selectedStudent);
+  if(selectedIndex>=0)state.selectedStudentIndex=selectedIndex;
   const medValue=readOptional('careMedication');
   const dose=readOptional('careMedicationDose');
   let medication='Sin medicamento administrado';
   let medicationInventoryIndex=null;
   if(medValue && medValue!=='otro'){
-    const parsedMedIndex=parseInt(medValue,10);
-    if(Number.isFinite(parsedMedIndex) && parsedMedIndex>=0 && parsedMedIndex<state.inventory.length){
-      medicationInventoryIndex=parsedMedIndex;
-      medication=state.inventory[parsedMedIndex].name;
+    /* M3-bis: se localiza por ID; el índice solo se deriva DESPUÉS, para no
+       cambiar la firma de registerInventoryUse. Si el insumo desapareció del
+       inventario, se registra la atención sin descontar nada en lugar de
+       descontar el que ocupe esa posición ahora. */
+    const medIdx=(state.inventory||[]).findIndex(m=>m&&m.id===medValue);
+    if(medIdx>=0){
+      medicationInventoryIndex=medIdx;
+      medication=state.inventory[medIdx].name;
+    }else{
+      medication='Medicamento no disponible en inventario';
     }
   }else if(medValue==='otro'){
     medication='Otro / no registrado en inventario';
