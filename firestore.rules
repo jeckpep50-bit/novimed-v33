@@ -180,22 +180,53 @@ service cloud.firestore {
       }
 
       // ─── ALERTAS ───────────────────────────────────────────────────────
+      // ─── MÁQUINA DE ESTADOS DE LA ALERTA (V42.2, A2) ───────────────────
+      // Con la cola como fuente de verdad (V42), el ciclo de vida de una
+      // alerta ya no puede vivir solo en el cliente. Pero un simple
+      // `status in [lista]` sobre el documento resultante fue un error de
+      // diseño: como valida el ESTADO FINAL y no la TRANSICIÓN, prohibía
+      // cualquier escritura que dejara la alerta en 'pending' — y eso
+      // bloquea reasignar prioridad, enlazar una ficha o destacar una
+      // alerta antigua, que son precisamente las funciones de V42.2.
+      //
+      // Lo correcto es declarar qué transiciones existen. El avance es
+      // irreversible: una vez atendida, no se vuelve a la cola de espera,
+      // porque revertir borraría la medición del tiempo de respuesta.
+      function alertFrom() { return resource.data.get('status', 'pending'); }
+      function alertTo()   { return request.resource.data.get('status', 'pending'); }
+      function validAlertTransition() {
+        return (alertFrom() == 'pending'          && alertTo() in ['pending','attended','closed_none'])
+            || (alertFrom() == 'attended'         && alertTo() in ['attended','family_confirmed','closed_none'])
+            || (alertFrom() == 'family_confirmed' && alertTo() == 'family_confirmed')
+            || (alertFrom() == 'closed_none'      && alertTo() == 'closed_none');
+      }
       match /alerts/{alertId} {
         allow read:   if belongsTo(schoolId);
         allow create: if canWrite(schoolId)
                       && authoredByCaller(request.resource.data)
                       && sanePastTimestamp(request.resource.data)
-                      && request.resource.data.status == 'pending';
+                      && request.resource.data.status == 'pending'
+                      && request.resource.data.priority in ['Alta','Media','Baja'];
         allow update: if canWrite(schoolId)
+                      && updateAuthoredByCaller()
                       && request.resource.data.createdBy == resource.data.createdBy
                       && request.resource.data.createdAt == resource.data.createdAt
+                      && validAlertTransition()
+                      && request.resource.data.get('priority','Media') in ['Alta','Media','Baja']
                       && (
+                        // Avance del ciclo clínico
                         onlyChanges([
                           'status','attendedAt','attendedTimeLabel','attendedBy',
                           'familyConfirmedAt','familyReadTimeLabel','familyConfirmedBy',
-                          'careRecordId','updatedAt','updatedBy'
+                          'careRecordId','closedAt','closedReason','closedBy',
+                          'updatedAt','updatedBy'
                         ])
-                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+                        // V42.2: triaje sobre una alerta que sigue en cola.
+                        // Se separa a propósito de la rama anterior: reasignar
+                        // prioridad NO debe poder cambiar el estado de paso.
+                        || (alertFrom() == 'pending' && alertTo() == 'pending'
+                            && onlyChanges(['priority','priorityChangedBy','priorityChangedAt','updatedAt','updatedBy']))
+                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
                       );
         // Solo SuperAdmin, y solo con erasureLog ya registrado para el
         // estudiante de esta alerta.

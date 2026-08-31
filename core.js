@@ -58,7 +58,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V42.1.0';
+const NOVIMED_VERSION='V42.2.0';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -1183,6 +1183,45 @@ function renderSystemInfo(){
   const cu=el('configUser');if(cu)cu.textContent=currentSession.anonymous?'Modo demo (sin cuenta)':(currentSession.email||'—');
   const cr=el('configRole');if(cr)cr.textContent=roleLabel(sessionRole());
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
+  renderErasurePanel();
+}
+/* V42.2 — A1. El panel de eliminación solo se revela a un SuperAdmin. Esto
+   es comodidad de interfaz, NO seguridad: quien manda son las reglas de
+   Firestore, que rechazan la escritura venga de donde venga. Ocultar un
+   botón nunca es un control de acceso. */
+function renderErasurePanel(){
+  const panel=el('erasurePanel');
+  if(!panel)return;
+  const isSuper=sessionRole()==='SuperAdmin';
+  panel.style.display=isSuper?'':'none';
+  if(!isSuper)return;
+  const sel=el('erasureStudent');
+  if(!sel)return;
+  const prev=sel.value;
+  const list=(state.students||[]).filter(s=>s&&s.id);
+  sel.innerHTML=list.length
+    ? list.map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.fullName||'Estudiante sin nombre')}${s.isArchived?' · archivado':''}</option>`).join('')
+    : '<option value="">No hay fichas registradas</option>';
+  if(prev && list.some(s=>s.id===prev)) sel.value=prev;
+}
+async function submitErasureRequest(){
+  const id=el('erasureStudent')?.value||'';
+  const reason=el('erasureReason')?.value||'';
+  if(!id){showToast('Sin estudiante','Selecciona la ficha sobre la que se presentó la solicitud.');return;}
+  const student=studentById(id);
+  /* Confirmación explícita con el nombre delante: registrar la solicitud
+     sobre la ficha equivocada deja una constancia que no se puede corregir
+     (allow update, delete: if false). */
+  const ok=window.confirm('Vas a registrar una solicitud de eliminación para:\n\n'
+    +((student&&student.fullName)||id)
+    +'\n\nEste registro es permanente y no se puede editar ni borrar. No elimina datos por sí mismo.\n\n¿Continuar?');
+  if(!ok)return;
+  const res=await (window.novimedRegisterErasureRequest
+    ? window.novimedRegisterErasureRequest(id,reason)
+    : Promise.resolve({ok:false,code:'sin-conexion'}));
+  if(res&&res.ok){
+    const t=el('erasureReason');if(t)t.value='';
+  }
 }
 /* V42.0.1 — renderAll() era un punto único de fallo: no tenía ningún
    aislamiento, así que una excepción en CUALQUIER sección (p. ej. un
@@ -1479,6 +1518,7 @@ window.novimedConfirmFamilyReadLocal = confirmFamilyRead;
   ['setBodyArea',setBodyArea],
   ['expandTable',expandTable],['loadOlderFor',loadOlderFor],['openEditStudentModal',openEditStudentModal],
   ['archiveStudent',archiveStudent],['exportCareCSV',exportCareCSV],['exportStudentsCSV',exportStudentsCSV],
+  ['submitErasureRequest',submitErasureRequest],
   ['openFichaModalById',openFichaModalById],['toggleArchivedStudents',toggleArchivedStudents],
   ['submitTeacherPane',submitTeacherPane],['resetTeacherForm',resetTeacherForm]
 ].forEach(([name,fn])=>{ if(typeof fn==='function') window[name]=window[name]||fn; });

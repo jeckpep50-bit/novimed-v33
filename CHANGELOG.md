@@ -1,5 +1,74 @@
 # NOVIMED — Changelog
 
+## V42.2.0 — A1 y A2: derecho de eliminación con interfaz, y triaje posible
+
+### A2 — La regla de estados era un error de diseño mío
+
+V42.0.1 introdujo `request.resource.data.status in ['attended', ...]` para
+impedir que una alerta volviera a `pending` y borrara su medición de tiempo
+de respuesta. La intención era correcta; la implementación, no: esa condición
+valida el **estado final**, no la **transición**. El efecto real era que
+*ninguna* escritura podía dejar una alerta en `pending` — bloqueando
+reasignar prioridad, enlazar una ficha o destacar una alerta antigua, que son
+justamente las funciones de V42.2. Habría aparecido como un
+`permission-denied` incomprensible al escribir ese código.
+
+Se sustituye por una máquina de estados explícita (`validAlertTransition()`):
+
+    pending          → pending | attended | closed_none
+    attended         → attended | family_confirmed | closed_none
+    family_confirmed → family_confirmed   (terminal)
+    closed_none      → closed_none        (terminal)
+
+El avance sigue siendo irreversible, que era el objetivo original, pero ahora
+sin efectos colaterales. Se añade además una rama separada para el triaje:
+cambiar `priority` sobre una alerta en cola es legítimo y **no puede colar un
+cambio de estado**, porque las dos ramas están deliberadamente disjuntas.
+`priority` se valida contra el catálogo Alta/Media/Baja tanto al crear como al
+actualizar.
+
+**Nota de despliegue**: el endurecimiento de `alerts` de V42.0.1 nunca llegó a
+`firestore.rules` en el repositorio (sí llegó el de `inventory`), pero sus 3
+pruebas sí. Esos casos habrían fallado contra las reglas publicadas. Esta
+versión aplica ambas cosas de forma coherente: autoría verificada
+(`updateAuthoredByCaller()`) más la máquina de estados.
+
+### A1 — El derecho de eliminación ya se puede ejercer
+
+Desde V42.0 las reglas exigen `erasureLog/{studentId}` antes de permitir
+cualquier borrado real, pero **ningún código de la aplicación podía crear ese
+documento**. La función estaba protegida y, a la vez, era imposible de
+ejercer: ante una solicitud de un padre habría que entrar a la consola de
+Firebase y escribir el documento a mano, sin validación, sin trazabilidad de
+quién autorizó y sin que el runbook lo explicara. Una función legal que solo
+existe en las reglas no es una función entregada.
+
+- `window.novimedRegisterErasureRequest(studentId, reason)` en `sync.js`.
+- Panel **Derecho de eliminación (LOPDP)** en Configuración, revelado solo a
+  SuperAdmin. Ocultarlo es comodidad de interfaz, no seguridad: quien manda
+  son las reglas, que rechazan la escritura venga de donde venga.
+- Confirmación con el nombre del estudiante delante, porque el registro es
+  permanente (`allow update, delete: if false`) y una constancia sobre la
+  ficha equivocada no se puede corregir.
+- El texto de la interfaz insiste en lo que la función **no** hace: registrar
+  la solicitud no borra nada. El borrado sigue siendo posterior y deliberado.
+
+### Pruebas
+
+**44 casos de reglas** (antes 33) y 13 de purga. Los 11 nuevos cubren: las
+seis transiciones válidas e inválidas de la alerta, que el triaje no pueda
+colar un cambio de estado, la prioridad fuera de catálogo, y el ciclo completo
+del `erasureLog` — que un SuperAdmin puede registrar, que Personal_Salud no,
+que un motivo corto se rechaza y que la constancia no se puede editar ni
+borrar.
+
+### Higiene
+
+`purge-test.mjs` se renombra a **`purge-test.mjs`**. La subida web desde
+iPad convierte el segundo punto del nombre en guion bajo
+(`local-purge_test.mjs`), lo que dejaba `npm run test:purge` apuntando a un
+archivo inexistente. Un solo punto en el nombre elimina el problema de raíz.
+
 ## V42.1.0 — A4: los datos clínicos no sobreviven al cierre de sesión
 
 Cierra el bloqueante legal identificado en la auditoría 360. Hasta V42.0.2,
@@ -145,7 +214,7 @@ Hasta ahora ningún historial clínico podía borrarse, ni siquiera con rol Supe
 
 - **Nueva colección `erasureLog/{studentId}`**: un documento por estudiante, con el `studentId` como ID del documento. Solo `SuperAdmin` puede crearlo (autoría verificada, motivo de 10 a 500 caracteres). **Create-only**: nunca se puede actualizar ni borrar, así que sigue existiendo como prueba permanente incluso después de que el resto de los datos del estudiante se haya borrado.
 - **El borrado real de `students`, `careRecords`, `alerts`, `vaccines` e `inventoryLog` ahora requiere dos condiciones a la vez**: rol `SuperAdmin` (nunca `Admin_Colegio` ni `Personal_Salud`), y que ya exista `erasureLog/{studentId}` para ese estudiante. Las reglas lo exigen directamente vía `exists()` — no es solo disciplina de procedimiento, un intento de borrar sin el registro previo se deniega en el servidor. Un registro huérfano (sin `studentId`, nunca enlazado a una ficha) queda protegido por defecto: no hay forma de que exista el `erasureLog` correspondiente.
-- 9 pruebas nuevas contra el emulador de Firestore (`firestore.rules.test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
+- 9 pruebas nuevas contra el emulador de Firestore (`rules-test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
 - **Falta lo legal, no lo técnico**: cómo se verifica que quien pide el borrado es realmente el padre o tutor, plazos de respuesta, y si aplica alguna excepción de retención — ver `PLAN_DE_TRABAJO.md`, Fase 5.
 - `RUNBOOK.md §7.1` gana una cuarta simulación obligatoria en el Rules Playground antes de publicar: `SuperAdmin` intentando borrar sin `erasureLog` previo debe denegarse.
 
@@ -156,7 +225,7 @@ Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta
 - **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
 - **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
 - Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
-- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `rules-test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
 
 ## V41.1 — Vista Docente: formulario real
 

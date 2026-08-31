@@ -1003,6 +1003,57 @@ function doDemoLogin(){
    las escrituras que aún no llegaron al servidor, así que antes de destruirla
    se intenta enviarla y, si algo queda, se dice exactamente qué se va a
    perder y se pide confirmación. Nunca se borra trabajo en silencio. */
+/* ═══════════════════════════════════════════════════════════════════════
+   V42.2 — A1. DERECHO DE ELIMINACIÓN (LOPDP)
+
+   Las reglas exigen desde V42.0 que exista `erasureLog/{studentId}` antes de
+   permitir cualquier borrado real. Pero NINGÚN código de la aplicación podía
+   crear ese documento: la función estaba protegida y, a la vez, era
+   imposible de ejercer. Cuando un padre presentara la solicitud, alguien
+   tendría que entrar a la consola de Firebase y escribir el documento a
+   mano — sin validación, sin trazabilidad de quién autorizó y sin que el
+   runbook explicara cómo. Una función legal que solo existe en las reglas no
+   es una función entregada.
+
+   Esto NO borra nada. Registra la solicitud, que es el paso previo
+   obligatorio y el que deja constancia permanente (`allow update, delete:
+   if false`). El borrado sigue siendo una operación deliberada y separada.
+   ═══════════════════════════════════════════════════════════════════════ */
+window.novimedRegisterErasureRequest = async function(studentId, reason){
+  if(!SCHOOL_ID){
+    uiNotify("Sin sesión", "Inicia sesión para registrar una solicitud de eliminación.");
+    return { ok:false, code:"no-session" };
+  }
+  if(!IDENTITY || IDENTITY.role !== "SuperAdmin"){
+    /* Se comprueba aquí además de en las reglas: el usuario merece saber por
+       qué no puede, no un "permission-denied" críptico del servidor. */
+    uiNotify("Permiso insuficiente", "Solo un SuperAdmin de Novimed puede registrar una solicitud de eliminación.");
+    return { ok:false, code:"forbidden" };
+  }
+  const id = String(studentId || "").trim();
+  const motivo = String(reason || "").trim();
+  if(!id) return { ok:false, code:"no-student" };
+  if(motivo.length < 10 || motivo.length > 500){
+    uiNotify("Motivo insuficiente", "Describe la solicitud en al menos 10 caracteres: es lo que leerá quien audite esta eliminación años después.");
+    return { ok:false, code:"bad-reason" };
+  }
+  try{
+    /* Sin merge y con el ID del estudiante como ID del documento: es lo que
+       `hasErasureLog()` comprueba con exists(). */
+    await setDoc(doc(colRef("erasureLog"), id), authored({
+      studentId: id,
+      reason: motivo,
+      requestedAt: Date.now()
+    }));
+    uiNotify("Solicitud registrada", "Queda constancia permanente. El borrado de los datos es un paso aparte y deliberado.");
+    return { ok:true };
+  }catch(err){
+    console.error("erasureLog:", err);
+    uiNotify("No se pudo registrar", err.code || "error");
+    return { ok:false, code: err.code || "error" };
+  }
+};
+
 window.novimedLogout = async function(){
   const pendientes = () => (window.novimedPendingOpsCount ? window.novimedPendingOpsCount() : 0);
 
