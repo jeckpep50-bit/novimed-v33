@@ -1,12 +1,93 @@
 # NOVIMED — Changelog
 
+## V42.0.1 — Hotfix de verdad clínica, navegación y reglas
+
+Corrige defectos que sobrevivieron a las barridas de V40.1 y V41 y que solo
+se manifiestan en una institución real, nunca en la demo de ventas.
+
+**Bloqueantes (P0)**
+- **Panel directivo (`core.js`, `renderRoles`)**: mostraba en TODA institución
+  «96% de lectura», «2 casos críticos», «2m 34s de respuesta» y una tabla
+  titulada *Trazabilidad del caso Sofía Martínez* con horas fijas. No estaba
+  protegido por `isDemoTenant()`. Ahora los cuatro KPIs y la trazabilidad se
+  derivan de `alerts`/`careRecords` con autoría real, y la ausencia de datos
+  se declara («—», «sin mediciones aún») en vez de rellenarse.
+- **Feed de actividad (`sync.js`, `mapFirestoreToLocalState`)**: inyectaba
+  «Andrés Sánchez recibió alerta» y «Ana Martínez pendiente de lectura» en
+  cualquier colegio, atribuyendo actos a personas inexistentes. Usa ahora el
+  autor real (`updatedBy`, disponible desde V41) o texto impersonal.
+- **Caída total de la interfaz por un documento de vacunas sin `status`**:
+  `v.status.includes()` lanzaba `TypeError` dentro de `renderAll()`, que no
+  tenía ningún aislamiento, abortando el ciclo completo (KPIs, héroe,
+  reportes) sin error visible. Se normaliza en el mapper y **cada sección de
+  `renderAll()` queda aislada**: la que falle se registra y el resto se
+  actualiza igual.
+- **El enlace atención↔alerta se persistía como `null`**: `submitCare` en
+  `sync.js` no esperaba al `addDoc` de la atención antes de escribir
+  `careRecordId`, así que el FK que V41 introdujo quedaba vacío en Firestore
+  y se perdía al recargar. La función local devuelve ahora su promesa y se
+  espera antes de enlazar.
+
+**Producto (P1)**
+- **Módulo Riesgo revivido**: `state.riskProfiles` se vaciaba al activar un
+  tenant real y nada volvía a llenarlo — tabla vacía sin estado vacío,
+  contadores en 0/0/0 y el KPI de Reportes fijo en 0. Se deriva ahora de
+  fichas + alertas + atenciones. `calculateRisk()` no cambia.
+- **Prioridad real (cierra A4)**: se escribía siempre `"Alta"`, de modo que
+  el gráfico «Alertas por prioridad» no podía mostrar otra cosa. Selector
+  Alta/Media/Baja con el criterio explícito junto a cada opción.
+- **Navegación**: Atenciones, Riesgo, Vacunas e Inventario existían como
+  páginas pero no tenían entrada en el menú; el registro médico escolar solo
+  se alcanzaba desde un botón dentro de una tarjeta. 11 páginas, 11 entradas.
+- **Atención sin matrícula**: `submitCare` caía a `students[0]` (undefined) y
+  creaba un registro clínico huérfano con `studentId: null`. Se bloquea en
+  `openAttentionModal()`.
+- **Acoplamiento de render**: `renderRoles` copiaba el HTML de `#familyNotices`,
+  que el render selectivo de V39 podía no haber actualizado. Se fuerza el
+  render de origen antes de copiar.
+- **Cola offline**: `queueRunning` no se liberaba en un `finally`; una
+  excepción inesperada dejaba la cola bloqueada el resto de la sesión.
+
+**Reglas de Firestore**
+- `alerts`: el `update` no exigía `updateAuthoredByCaller()` — `attendedBy` y
+  `familyConfirmedBy` eran campos que el cliente afirmaba sin verificación,
+  contra el principio nº 4 del propio archivo. Y `status` admitía cualquier
+  cadena: se podía devolver una alerta a `pending` y borrar su medición de
+  respuesta. Ambos cerrados; se añaden los campos de cierre de V42.2.
+- `inventory`: el `update` no tenía `onlyChanges()` ni autoría, así que
+  `stock` se podía reescribir en silencio sin rastro en `inventoryLog` — pese
+  a que el comentario del archivo afirmaba lo contrario. Campos acotados,
+  autor verificado y `stock` validado como número no negativo.
+- **6 pruebas nuevas** que ejercen exactamente estos tres huecos (33 casos en
+  total), incluida una que confirma que el descuento real de `invUse` sigue
+  aceptándose.
+- *No* se toca `vaccines`: su brecha está deliberadamente documentada por un
+  test que asserta el comportamiento actual y rastreada para V43/A3. Cerrarla
+  aquí rompería ese test sin cerrar el módulo, que sigue muerto en producción.
+
+**Higiene del repositorio**
+- `firestore.rules 2.txt`, `smoke-test.js` y `gitignore` eran renombrados
+  accidentales de la subida web desde iPad: los archivos correctos existían
+  con el nombre equivocado, así que las reglas nuevas no estaban activas,
+  `test:smoke` ejecutaba la versión rota y el `.gitignore` no surtía efecto.
+  Restaurados. `CAMBIOS.diff` eliminado del repositorio.
+- Referencias a `tests/` y `scripts/` corregidas en CHANGELOG, PLAN_DE_TRABAJO,
+  ROADMAP_V42 y VERIFICACION_FASE0: esos directorios nunca existieron.
+- `NOVIMED_VERSION` y `package.json` alineados en 42.0.1. El marcador del
+  panel Sistema vuelve a servir para verificar despliegues.
+
+**Pendiente, no incluido aquí**: limpieza de `localStorage` al cerrar sesión
+(PHI de menores persiste en iPads compartidos tras el logout — bloqueante
+legal antes del piloto), consolidación de los 129 `!important` de `main.css`,
+y el contraste de `--muted` (#71819b = 3,95:1, falla WCAG AA).
+
 ## Reglas — Derecho de eliminación (LOPDP)
 
 Hasta ahora ningún historial clínico podía borrarse, ni siquiera con rol SuperAdmin (`allow delete: if false;` en todas las colecciones clínicas). Eso es correcto como postura por defecto, pero deja sin forma técnica de atender el derecho de eliminación de datos personales (LOPDP, Ecuador) cuando un padre o tutor lo solicita para su hijo.
 
 - **Nueva colección `erasureLog/{studentId}`**: un documento por estudiante, con el `studentId` como ID del documento. Solo `SuperAdmin` puede crearlo (autoría verificada, motivo de 10 a 500 caracteres). **Create-only**: nunca se puede actualizar ni borrar, así que sigue existiendo como prueba permanente incluso después de que el resto de los datos del estudiante se haya borrado.
 - **El borrado real de `students`, `careRecords`, `alerts`, `vaccines` e `inventoryLog` ahora requiere dos condiciones a la vez**: rol `SuperAdmin` (nunca `Admin_Colegio` ni `Personal_Salud`), y que ya exista `erasureLog/{studentId}` para ese estudiante. Las reglas lo exigen directamente vía `exists()` — no es solo disciplina de procedimiento, un intento de borrar sin el registro previo se deniega en el servidor. Un registro huérfano (sin `studentId`, nunca enlazado a una ficha) queda protegido por defecto: no hay forma de que exista el `erasureLog` correspondiente.
-- 9 pruebas nuevas contra el emulador de Firestore (`tests/firestore.rules.test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
+- 9 pruebas nuevas contra el emulador de Firestore (`firestore.rules.test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
 - **Falta lo legal, no lo técnico**: cómo se verifica que quien pide el borrado es realmente el padre o tutor, plazos de respuesta, y si aplica alguna excepción de retención — ver `PLAN_DE_TRABAJO.md`, Fase 5.
 - `RUNBOOK.md §7.1` gana una cuarta simulación obligatoria en el Rules Playground antes de publicar: `SuperAdmin` intentando borrar sin `erasureLog` previo debe denegarse.
 
@@ -15,9 +96,9 @@ Hasta ahora ningún historial clínico podía borrarse, ni siquiera con rol Supe
 Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta es la fase 1, sin riesgo por diseño: se sigue escribiendo en `active-case` igual que antes).
 
 - **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
-- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `scripts/smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
 - Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
-- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `tests/firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `scripts/smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
 
 ## V41.1 — Vista Docente: formulario real
 

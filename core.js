@@ -54,7 +54,7 @@ const state={
   ]
 };
 const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
-const NOVIMED_VERSION='V41.1';
+const NOVIMED_VERSION='V42.0.1';
 function el(id){return document.getElementById(id)}
 
 /* V36 — Paginación de tablas (client-side, primera página de 15) */
@@ -641,12 +641,50 @@ function calculateRisk(profile){
   }
   return {score,level,cls,action,factors};
 }
+/* V42.0.1 — P1-1. `state.riskProfiles` se sembraba en el estado inicial, se
+   vaciaba al activar un tenant real y NADA volvía a llenarlo: en un colegio
+   real la página Riesgo mostraba una tabla vacía sin estado vacío, los
+   contadores en 0/0/0 y el KPI de Reportes fijo en 0. Además buscaba
+   literalmente 'Sofía Martínez'. Ahora el perfil se DERIVA de los datos
+   reales (fichas + alertas + atenciones) en cada render. calculateRisk() no
+   cambia: siempre estuvo bien escrita, solo le faltaba la fuente. */
+function buildRiskProfiles(){
+  const students=activeStudents();
+  if(!students.length)return [];
+  const alerts=Array.isArray(state.alerts)?state.alerts:[];
+  const care=state.careRecords||[];
+  const monthAgo=Date.now()-30*86400000;
+  return students.map(s=>{
+    const mine=alerts.filter(a=>a&&a.studentId===s.id);
+    const openAlert=mine.some(a=>a.status==='pending');
+    const openCase=mine.some(a=>a.status==='attended');
+    const careCountMonth=care.filter(r=>r&&r.studentId===s.id&&(!Number.isFinite(r.createdAt)||r.createdAt>=monthAgo)).length;
+    /* Solo se considera "lectura familiar pendiente" si hay algo que leer. */
+    const closable=mine.filter(a=>a.status==='attended'||a.status==='family_confirmed');
+    const familyRead=closable.length?closable.every(a=>a.status==='family_confirmed'):true;
+    return {
+      student:s.fullName||'Estudiante sin nombre',
+      studentId:s.id||null,
+      course:s.course||'Sin curso registrado',
+      condition:conditionSummary(s),
+      critical:!!(s.allergies||s.chronic),
+      activeAlert:openAlert,
+      openCase,
+      careCountMonth,
+      vaccineStatus:s.vaccineStatus||'',
+      familyRead,
+      action:openAlert?'Atención prioritaria en curso':(careCountMonth>=3?'Revisar patrón de atenciones':'Control regular')
+    };
+  });
+}
 function syncRiskState(){
-  const sofia=state.riskProfiles.find(r=>r.student==='Sofía Martínez');
-  if(sofia){
-    sofia.openCase=!state.careSaved;
-    sofia.familyRead=state.familyRead;
+  /* El tenant de ventas conserva su guion sembrado; el resto deriva. */
+  if(isDemoTenant()&&(state.riskProfiles||[]).length&&!Array.isArray(state.alerts)){
+    const demo=state.riskProfiles.find(r=>r.student==='Sofía Martínez');
+    if(demo){demo.openCase=!state.careSaved;demo.familyRead=state.familyRead;}
+    return;
   }
+  state.riskProfiles=buildRiskProfiles();
 }
 function renderRisk(){
   syncRiskState();
@@ -660,7 +698,7 @@ function renderRisk(){
   el('riskHigh').textContent=high;
   el('riskMedium').textContent=medium;
   el('riskLow').textContent=low;
-  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+evaluated.map(({profile,risk})=>{
+  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+(evaluated.length?'':emptyRow(6,'Sin fichas activas todavía. El semáforo se construye a partir de la matrícula registrada.'))+evaluated.map(({profile,risk})=>{
     return `<tr><td>${escapeHtml(profile.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(profile.course)}</span></td><td>${escapeHtml(profile.condition)}</td><td><span class="chip ${risk.cls}">${risk.level}</span></td><td><div class="risk-score"><span>${risk.score}/100</span><div class="risk-meter"><div class="risk-fill ${risk.cls}" style="width:${risk.score}%"></div></div></div></td><td>${escapeHtml(risk.factors.join(', ') || 'sin factores activos')}</td><td>${escapeHtml(profile.action)}</td></tr>`;
   }).join('');
   logic.innerHTML=[
@@ -675,17 +713,22 @@ function renderVaccines(){
   const table=el('vaccinesTable');
   const schedule=el('vaccineSchedule');
   if(!table || !schedule) return;
-  const ok=state.vaccines.filter(v=>v.status==='Al día').length;
-  const pending=state.vaccines.filter(v=>v.status.includes('Pendiente')).length;
-  const review=state.vaccines.filter(v=>v.status.includes('Próxima')).length;
+  /* V42.0.1 — `v.status` podía llegar undefined desde Firestore y
+     `.includes()` lanzaba TypeError dentro de renderAll(), abortando el
+     ciclo completo (KPIs, héroe, reportes) sin error visible. */
+  const vstatus=v=>String((v&&v.status)||'Sin registrar');
+  const ok=state.vaccines.filter(v=>vstatus(v)==='Al día').length;
+  const pending=state.vaccines.filter(v=>vstatus(v).includes('Pendiente')).length;
+  const review=state.vaccines.filter(v=>vstatus(v).includes('Próxima')).length;
   el('vacTotal').textContent=state.vaccines.length;
   el('vacOk').textContent=ok;
   el('vacPending').textContent=pending;
   el('vacReview').textContent=review;
   table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Edad</th><th scope="col">Referencia MSP</th><th scope="col">Estado</th><th scope="col">Próxima acción</th></tr>'+state.vaccines.map(v=>{
-    const cls=v.status==='Al día'?'green':(v.status.includes('Pendiente')?'red':'amber');
-    return `<tr><td>${escapeHtml(v.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course)}</span></td><td>${escapeHtml(v.age)}</td><td>${escapeHtml(v.reference)}</td><td><span class="chip ${cls}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.next)}</td></tr>`;
-  }).join('');
+    const st=vstatus(v);
+    const cls=st==='Al día'?'green':(st.includes('Pendiente')?'red':'amber');
+    return `<tr><td>${escapeHtml(v.studentName||v.student||'Sin especificar')}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course||'')}</span></td><td>${escapeHtml(v.age||'')}</td><td>${escapeHtml(v.reference||'Sin registrar')}</td><td><span class="chip ${cls}">${escapeHtml(st)}</span></td><td>${escapeHtml(v.next||'Sin registrar')}</td></tr>`;
+  }).join('')||emptyRow(5,'Sin registros de vacunación.');
   schedule.innerHTML=state.vaccineSchedule.map((v,i)=>`<div class="flow-step"><div class="flow-num">${v[0]}</div><div><b>${v[1]}</b><p>${v[2]}</p></div></div>`).join('')+`<p style="color:#71819b;font-size:12px;line-height:1.45;margin-top:14px">Referencia: Esquema Nacional de Vacunación Ecuador 2025 del Ministerio de Salud Pública. Este módulo registra seguimiento escolar y verificación documental; no diagnostica ni reemplaza la validación del personal de salud.</p>`;
 }
 
@@ -966,8 +1009,41 @@ function renderTeacherPane(){
 }
 function renderRoles(){el('role-medico').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">MG</div><div><h3>Panel médico de atención</h3><p>Desde aquí se consulta Ficha Médica, Registra Atención, Revisa Riesgo, Vacunas e Inventario.</p></div></div><div class="actions"><button type="button" class="btn secondary" onclick="openFichaModal()">Ver ficha médica</button><button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button><button type="button" class="btn secondary" onclick="showPage('riesgo')">Revisar riesgo</button><button type="button" class="btn secondary" onclick="showPage('vacunas')">Control de vacunas</button><button type="button" class="btn secondary" onclick="showPage('inventario')">Medicamentos disponibles</button></div></article><article class="card"><div class="section-head"><h3>Flujo clínico</h3><span class="badge green">Activo</span></div><div class="feed">${state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}</div></article></div>`;
 renderTeacherPane();
-el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
-el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="green">${state.familyRead?'96%':'94%'}</strong><em>actualizado</em></div><div class="kpi"><small>Casos críticos</small><strong class="red">2</strong><em class="red">seguimiento</em></div><div class="kpi"><small>Respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div></div><div class="card"><h3>Trazabilidad del caso Sofía Martínez</h3><br><table class="table"><tr><th>Momento</th><th>Acción</th><th>Responsable</th></tr><tr><td>10:24</td><td>Alerta reportada</td><td>Docente</td></tr><tr><td>10:25</td><td>Ficha consultada</td><td>Departamento médico</td></tr><tr><td>10:27</td><td>Familia notificada</td><td>Novimed</td></tr><tr><td>10:29</td><td>${state.familyRead?'Lectura confirmada':'Lectura pendiente'}</td><td>Familia</td></tr></table></div>`}
+el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;
+/* V42.0.1 — P1-4. Este bloque copia el HTML de #familyNotices, pero el
+   render selectivo de V39 se salta renderFamily() cuando la página
+   'familias' no está visible — estando en Roles se copiaba marcado viejo
+   (incluso de otro tenant). Se fuerza el render de origen antes de copiar. */
+renderFamily();
+el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
+/* V42.0.1 — P0-1. Este panel mostraba en TODA institución: 96% de lectura,
+   2 casos críticos, 2m 34s de respuesta y una tabla titulada "Trazabilidad
+   del caso Sofía Martínez" con horas fijas. Un rector de un colegio cliente
+   veía un caso inventado presentado como trazabilidad propia. Es el mismo
+   defecto que V40.1 cerró en el héroe y en Familias, superviviente aquí.
+   Ahora todo se deriva de datos reales y la ausencia se declara. */
+const _dirAlerts=Array.isArray(state.alerts)?state.alerts:null;
+const _dirResp=avgResponseMs();
+const _dirRead=familyReadPct();
+const _dirCrit=(state.riskProfiles||[]).map(p=>calculateRisk(p)).filter(r=>r&&r.cls==='red').length;
+const _dash=(v)=>v===null||v===undefined?'—':v;
+el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="${_dirRead===null?'':'green'}">${_dirRead===null?'—':_dirRead+'%'}</strong><em>${_dirRead===null?'sin cierres registrados':'sobre atenciones cerradas'}</em></div><div class="kpi"><small>Casos críticos</small><strong class="${_dirCrit?'red':''}">${_dirCrit}</strong><em class="${_dirCrit?'red':'green'}">${_dirCrit?'en seguimiento':'ninguno activo'}</em></div><div class="kpi"><small>Respuesta</small><strong>${_dirResp?formatDuration(_dirResp.avg):'—'}</strong><em>${_dirResp?(_dirResp.n===1?'1 caso medido':_dirResp.n+' casos medidos'):'sin mediciones aún'}</em></div></div>`
++`<div class="card"><div class="section-head"><h3>Trazabilidad del último caso</h3><span class="badge blue">Datos reales</span></div><br>${_dirTrace()}</div>`}
+/* La trazabilidad se construye a partir de la alerta enfocada y su autoría
+   real (createdBy/attendedBy, disponibles desde V41). Si no hay caso, se
+   dice que no lo hay en vez de rellenar la tabla. */
+function _dirTrace(){
+  const alerts=Array.isArray(state.alerts)?state.alerts:null;
+  const a=alerts&&(alerts.find(x=>x&&x.id===state.activeAlertId)||alerts[0]);
+  if(!a)return '<p style="color:#71819b;font-size:13px;line-height:1.5">Aún no hay alertas registradas en esta institución. Cuando se reporte la primera, aquí aparecerá su recorrido completo con hora y responsable de cada paso.</p>';
+  const who=st=>escapeHtml((st&&(st.email||st.role))||'Sin registrar');
+  const rows=[['Alerta reportada',a.timeLabel,who(a.createdBy)]];
+  if(a.attendedTimeLabel||a.attendedAt)rows.push(['Atención registrada',a.attendedTimeLabel,who(a.attendedBy||a.createdBy)]);
+  if(a.status==='family_confirmed')rows.push(['Lectura familiar confirmada',a.familyReadTimeLabel,who(a.familyConfirmedBy)]);
+  return '<table class="table"><tr><th scope="col">Momento</th><th scope="col">Acción</th><th scope="col">Responsable</th></tr>'
+    +rows.map(r=>`<tr><td>${escapeHtml(r[1]||'—')}</td><td>${escapeHtml(r[0])}</td><td>${r[2]}</td></tr>`).join('')
+    +'</table>'+(a.status==='pending'?'<p style="color:#71819b;font-size:12px;margin-top:10px">Caso todavía abierto: los pasos siguientes aparecerán a medida que ocurran.</p>':'');
+}
 
 function populateAttentionOptions(){
   const studentSelect=el('careStudent');
@@ -1056,9 +1132,27 @@ function renderSystemInfo(){
   const cr=el('configRole');if(cr)cr.textContent=roleLabel(sessionRole());
   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
 }
+/* V42.0.1 — renderAll() era un punto único de fallo: no tenía ningún
+   aislamiento, así que una excepción en CUALQUIER sección (p. ej. un
+   documento malformado en vacunas) abortaba el ciclo entero y dejaba KPIs,
+   héroe y reportes con datos viejos, sin error visible para el usuario.
+   Cada sección se aísla ahora: la que falle se registra en consola y el
+   resto de la pantalla sigue actualizándose. */
+function safeSection(name,fn){
+  try{fn();}catch(e){console.error('Fallo al renderizar "'+name+'":',e);}
+}
 function renderAll(){
   applyQueueDerivedFocus();
-  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
+  if(state.activities.length>100)state.activities=state.activities.slice(-100);
+  safeSection('feed',renderFeed);
+  if(shouldRender('renderAlerts'))safeSection('alertas',renderAlerts);
+  if(shouldRender('renderCare'))safeSection('atenciones',renderCare);
+  if(shouldRender('renderFamily'))safeSection('familias',renderFamily);
+  if(shouldRender('renderStudents'))safeSection('estudiantes',renderStudents);
+  if(shouldRender('renderVaccines'))safeSection('vacunas',renderVaccines);
+  if(shouldRender('renderInventory'))safeSection('inventario',renderInventory);
+  if(shouldRender('renderRisk'))safeSection('riesgo',renderRisk);
+  if(shouldRender('renderRoles'))safeSection('roles',renderRoles);const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
   el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
   const hero=el('heroTitle');
   if(hero)hero.textContent=state.alertSent?((state.currentAlert&&state.currentAlert.studentName)||'Estudiante')+' necesita atención':'Sin alertas activas';
@@ -1076,7 +1170,7 @@ function renderAll(){
   const cat=el('chipAtenciones');if(cat&&(!isDemoTenant()||Array.isArray(state.alerts)))cat.textContent=careCountToday()+' atenciones';
   const cl=el('chipLectura');if(cl)cl.textContent=_frp!==null?_frp+'% lectura':(isDemoTenant()?'94% lectura':'— lectura');
   const cti=el('chipTiempo');if(cti){if(resp)cti.textContent=formatDuration(resp.avg);else if(!isDemoTenant())cti.textContent='—';}
-  if(shouldRender('renderReports'))renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
+  if(shouldRender('renderReports'))safeSection('reportes',renderReports);el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
 let lastFocusedBeforeModal=null;
 function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
 function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}/* V40.1 + V41 — El modal de alerta venía prellenado con el caso demo y
@@ -1099,6 +1193,7 @@ function openReportModal(){
   if(!guardWrite())return;
   populateAlertStudentOptions();
   ['reportRoom','reportSymptoms','reportStudentOther'].forEach(id=>{const n=el(id);if(n)n.value='';});
+  const pn=el('reportPriority');if(pn)pn.value='Media';
   const f=el('reportStudentOtherField');if(f)f.style.display='none';
   openModal('reportModal');
 }
@@ -1109,15 +1204,31 @@ window.novimedReadAlertForm=function(){
   const value=sel?sel.value:'';
   const other=readOptional('reportStudentOther');
   const linked=value&&value!=='__other__'?studentById(value):null;
+  /* V42.0.1 — P1-2 (A4). La prioridad se escribía siempre como "Alta", así
+     que el gráfico "Alertas por prioridad" no podía mostrar otra cosa. Ahora
+     la elige quien reporta, con el criterio a la vista en el formulario. */
+  const prioNode=el('reportPriority');
+  const prio=prioNode&&['Alta','Media','Baja'].includes(prioNode.value)?prioNode.value:'Media';
   return {
     studentId:linked?linked.id:null,
     studentName:linked?(linked.fullName||'Estudiante sin nombre'):(other||'Estudiante no registrado'),
     location:readOptional('reportRoom')||'Ubicación sin registrar',
     symptoms:readOptional('reportSymptoms')||'Síntomas sin especificar',
+    priority:prio,
     valid:!!(linked||other)
   };
 };function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){
-  if(!guardWrite())return;closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
+  if(!guardWrite())return;
+  /* V42.0.1 — P1-5. Sin matrícula, submitCare() caía a state.students[0]
+     (undefined) y creaba una atención con studentId null y nombre
+     "Estudiante sin nombre": un registro clínico huérfano e inauditable.
+     Se bloquea en el origen en lugar de fabricar el dato. */
+  if(!activeStudents().length){
+    showToast('Sin fichas activas','Registra primero la ficha del estudiante: una atención sin ficha no se puede auditar después.');
+    showPage('estudiantes');
+    return;
+  }
+  closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
 /**
  * @typedef {Object} AlertPayload
  * @property {string|null} studentId   Clave foránea a schools/{id}/students. null = sin ficha enlazada.
@@ -1181,9 +1292,13 @@ function submitCare(){
   if(medicationInventoryIndex!==null && Number.isFinite(medicationInventoryIndex)){
     registerInventoryUse(medicationInventoryIndex,record.studentName,'Administrado en atención médica',false,record.studentId);
   }
+  /* V42.0.1 — P0-4. Se guarda la promesa y se devuelve al final: sync.js la
+     espera antes de escribir `careRecordId`, que es lo que hacía que el
+     enlace atención↔alerta se persistiera vacío. */
+  let cloudCare=null;
   if(window.novimedCloudReady && window.novimedCloudAddCareRecord){
     const opId=window.novimedNewOpId?window.novimedNewOpId():null;
-    window.novimedCloudAddCareRecord(record,opId).catch(err=>{
+    cloudCare=window.novimedCloudAddCareRecord(record,opId).catch(err=>{
       console.error('Atención a nube:',err);
       state.careRecords.unshift({...record,_pendingOpId:opId});
       renderAll();
@@ -1198,6 +1313,7 @@ function submitCare(){
   showSuccess('Atención registrada','La atención médica quedó documentada y la familia fue notificada.');
   renderAll();
   showPage('atenciones');
+  return cloudCare;   /* P0-4: sync.js espera esto antes de enlazar la alerta */
 }
 /* V41 — confirmFamilyRead escribía sobre state.careRecords[0] (el registro
    MÁS RECIENTE), no sobre el vinculado al caso: la confirmación podía

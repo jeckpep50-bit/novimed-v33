@@ -6,7 +6,7 @@
  * (activado por firebase.json + sync.js) y usa firebase-admin apuntado a
  * los emuladores (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST)
  * para sembrar datos de prueba. Pensado para correr dentro de
- * `firebase emulators:exec "node scripts/smoke-test.mjs"` (ver
+ * `firebase emulators:exec "node smoke-test.mjs"` (ver
  * package.json → test:smoke), que levanta y apaga los emuladores solo.
  *
  * Dos escenarios:
@@ -20,7 +20,15 @@
  *     del documento único.
  */
 import { spawn, execSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
+
+/* Las capturas iban a `scripts/`, un directorio que no existe en el repo:
+   page.screenshot() lanzaba ENOENT y abortaba la corrida DESPUÉS de que el
+   escenario ya había pasado. Se escribe en un directorio propio que el
+   test crea, para que la salida no dependa del layout del repositorio. */
+const SHOT_DIR = "smoke-out";
+mkdirSync(SHOT_DIR, { recursive: true });
 
 const PORT = 5183;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -169,7 +177,14 @@ async function main() {
     // (browserRef se enlaza justo después de lanzar Chromium, más abajo)
     await waitForServer(BASE_URL, 20000);
     console.log("→ vite listo. Abriendo Chromium…");
-    browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+    /* Sin PLAYWRIGHT_CHROMIUM_PATH se usa el Chromium que gestiona la propia
+       Playwright (`npm run test:browsers`), que es lo que funciona en un
+       equipo normal y en CI. La variable existe solo para entornos donde el
+       binario vive fuera de la caché de Playwright: fijar una ruta absoluta
+       en el código hacía que este test solo pudiera correr en la máquina
+       donde se escribió. */
+    const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+    browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {});
     browserRef = browser;
 
     // Contextos separados por escenario: son "dos dispositivos distintos"
@@ -192,7 +207,7 @@ async function main() {
     );
     const demoHero = await demoPage.textContent("#mainStudentName");
     const demoKpi = await demoPage.textContent("#kpiAlerts");
-    await demoPage.screenshot({ path: "scripts/smoke-demo.png", fullPage: true });
+    await demoPage.screenshot({ path: `${SHOT_DIR}/smoke-demo.png`, fullPage: true });
     console.log(`  [demo] mainStudentName="${demoHero}" kpiAlerts="${demoKpi}"`);
     await demoPage.close();
     await demoCtx.close();
@@ -274,7 +289,7 @@ async function main() {
     }
     const afterHero = await realPage.textContent("#mainStudentName");
     const afterMeta = await realPage.textContent("#mainStudentMeta");
-    await realPage.screenshot({ path: "scripts/smoke-real-after-delete.png", fullPage: true });
+    await realPage.screenshot({ path: `${SHOT_DIR}/smoke-real-after-delete.png`, fullPage: true });
     console.log(`  [real] Sin active-case, tras recarga → mainStudentName="${afterHero}" mainStudentMeta="${afterMeta}"`);
     await realPage.close();
     await realCtx.close();

@@ -270,6 +270,7 @@ async function processQueue(trigger, force){
   const due = pendingOps.filter(o => o.status === "pending" && (force || o.nextAt <= now));
   if(!due.length) return;
   queueRunning = true;
+  try{
   for(const op of due){
     const exec = queueExecutors[op.type];
     if(!exec){ op.status = "done"; continue; }
@@ -292,10 +293,15 @@ async function processQueue(trigger, force){
       }
     }
   }
-  pendingOps = pendingOps.filter(o => o.status !== "done");
-  saveQueue(pendingOps);
-  queueRunning = false;
-  safeRender();
+  }finally{
+    /* Sin este finally, una excepción inesperada dejaba queueRunning en true
+       y la cola offline bloqueada para el resto de la sesión: los cambios
+       pendientes no se reintentaban nunca más. */
+    pendingOps = pendingOps.filter(o => o.status !== "done");
+    saveQueue(pendingOps);
+    queueRunning = false;
+    safeRender();
+  }
 }
 window.novimedProcessQueueNow = (force) => processQueue("manual", force === true);
 window.novimedQueueSnapshot = () => pendingOps.map(o => ({ type: o.type, attempts: o.attempts, status: o.status }));
@@ -481,7 +487,7 @@ function attachCollectionListeners(){
   const asObj = d => { const x = d.data(); return (x && typeof x === "object") ? { id: d.id, ...x } : null; };
   bind("students", "asc", d => { const o = asObj(d); if(o){ o.fullName = String(o.fullName || "Estudiante sin nombre"); o.isArchived = o.isArchived === true; } return o; }, true);
   bind("inventory", "asc", d => { const o = asObj(d); if(o){ o.name = String(o.name || "Ítem"); o.stock = Number.isFinite(Number(o.stock)) ? Number(o.stock) : 0; } return o; }, true);
-  bind("vaccines", "asc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; } return o; }, false);
+  bind("vaccines", "asc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; o.status = String(o.status || "Sin registrar"); } return o; }, false);
   /* V41 — `student` (nombre suelto) sobrevive en documentos anteriores a la
      migración. Se normaliza en lectura a studentName para que la UI tenga un
      único campo de presentación, sin reescribir el histórico. */
@@ -638,7 +644,12 @@ function mapFirestoreToLocalState(data){
       data.attentionTimeLabel || "Ahora",
       "blue",
       "Departamento médico notificado",
-      "Andrés Sánchez recibió alerta y consultó la ficha médica"
+      /* V42.0.1 — P0-2. Aquí se escribía "Andrés Sánchez" fijo, en TODA
+         institución. Con autoría real disponible desde V41, el feed usa
+         quien de verdad ejecutó el acto, o declara que no consta. */
+      (data.updatedBy && (data.updatedBy.email || data.updatedBy.role))
+        ? (data.updatedBy.email || data.updatedBy.role) + " recibió la alerta"
+        : "Recibida por el departamento de salud"
     ]);
     activities.push([
       data.attentionTimeLabel || "Ahora",
@@ -659,7 +670,9 @@ function mapFirestoreToLocalState(data){
       data.attentionTimeLabel || "Ahora",
       "amber",
       "Familia notificada",
-      familyRead ? "Ana Martínez confirmó lectura" : "Ana Martínez pendiente de lectura"
+      /* V42.0.1 — P0-2. "Ana Martínez" era el contacto del guion demo,
+         mostrado como hecho en cualquier colegio. */
+      familyRead ? "Lectura confirmada por la familia" : "Pendiente de confirmación de la familia"
     ]);
   }
 
@@ -668,7 +681,7 @@ function mapFirestoreToLocalState(data){
       data.familyReadTimeLabel || "Ahora",
       "amber",
       "Familia confirmó lectura",
-      "Ana Martínez recibió la información"
+      "La familia registró haber recibido la información"
     ]);
   }
 
@@ -751,7 +764,8 @@ window.submitTeacherAlert = async function(payload){
       studentUnlinked: !form.studentId,
       location: form.location,
       symptoms: form.symptoms,
-      priority: "Alta",
+      /* V42.0.1 — P1-2: prioridad real elegida al reportar, ya no constante. */
+      priority: ["Alta","Media","Baja"].includes(form.priority) ? form.priority : "Media",
       status: "pending",
       timeLabel: currentTimeLabel(),
       createdAt: Date.now(),
@@ -797,7 +811,15 @@ window.submitCare = async function(){
   const presumptiveDiagnosis = document.getElementById("carePresumptiveDiagnosis")?.value || "Sin especificar";
   const actionDone = document.getElementById("careActionDone")?.value || "Sin especificar";
 
-  window.novimedSubmitCareLocal?.();
+  /* V42.0.1 — P0-4. Antes se llamaba SIN await: linkedCareRecordId lo
+     asigna el .then() de novimedCloudAddCareRecord, así que cuando se
+     escribía `careRecordId` unas líneas más abajo el addDoc casi nunca
+     había resuelto y el enlace se persistía como null. El FK que V41
+     introdujo para no escribir sobre careRecords[0] quedaba vacío en
+     Firestore y se perdía al recargar — justo el criterio que V42 dice
+     cumplir. Ahora se espera a que la atención exista antes de enlazarla. */
+  try{ await window.novimedSubmitCareLocal?.(); }
+  catch(e){ console.error("Registro local de la atención:", e); }
   if(!cloudSessionReady) return; /* sin sesión: solo local */
 
   try{

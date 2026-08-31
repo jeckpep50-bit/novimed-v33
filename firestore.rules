@@ -6,7 +6,12 @@ rules_version = '2';
 // PRINCIPIOS
 //   1. Denegación por defecto. Nada fuera de schools/{schoolId} es accesible.
 //   2. Aislamiento por institución: el schoolId del claim manda, no la ruta.
-//   3. Ningún historial clínico se borra. Nunca. Ni con rol SuperAdmin.
+//   3. Ningún historial clínico se borra sin dejar constancia. Solo
+//      SuperAdmin puede borrar (derecho de eliminación — LOPDP — a
+//      solicitud de un padre o tutor). Nunca Admin_Colegio ni Personal_Salud.
+//      Y no puede borrar sin que exista antes un registro en `erasureLog`
+//      con el motivo: las reglas lo exigen, no es solo disciplina de
+//      procedimiento (ver esa colección más abajo).
 //   4. Ninguna escritura clínica sin autor verificado contra request.auth.uid.
 //   5. El cliente no puede fechar en el futuro ni falsear al servidor.
 //
@@ -78,6 +83,21 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
+    // ─── Derecho de eliminación (LOPDP) ────────────────────────────────────
+    // `erasureLog/{studentId}` — un documento por estudiante, con el
+    // estudiante como ID del documento (no un id autogenerado). Es lo que
+    // permite verificar "¿ya se registró el motivo para ESTE estudiante?"
+    // con un exists() directo, sin necesitar una consulta. Solo SuperAdmin
+    // puede crearlo, es create-only (nunca se actualiza ni se borra: es la
+    // única prueba que sobrevive después de que el resto de los datos del
+    // estudiante se hayan borrado), y solo entonces el borrado real de
+    // students/careRecords/alerts/vaccines/inventoryLog para ese estudiante
+    // queda permitido más abajo.
+    function hasErasureLog(schoolId, studentId) {
+      return studentId is string && studentId.size() > 0
+          && exists(/databases/$(database)/documents/schools/$(schoolId)/erasureLog/$(studentId));
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  ÁRBOL MULTI-TENANT
     // ═══════════════════════════════════════════════════════════════════
@@ -87,7 +107,10 @@ service cloud.firestore {
       allow write:  if false;   // el documento raíz del colegio se gestiona fuera de la app
 
       // ─── FICHAS DE ESTUDIANTES ─────────────────────────────────────────
-      // Nunca se borran. Se archivan con motivo obligatorio y autoría.
+      // La baja normal es el archivado lógico (motivo obligatorio y
+      // autoría), no el borrado. El borrado real existe solo para el
+      // derecho de eliminación (ver erasureLog más abajo): SuperAdmin,
+      // y solo con el motivo ya registrado.
       match /students/{studentId} {
         allow read:   if belongsTo(schoolId);
         allow create: if canWrite(schoolId)
@@ -126,8 +149,10 @@ service cloud.firestore {
                         )
                       );
 
-        // 🔒 Un historial clínico de un menor no se destruye desde un cliente.
-        allow delete: if false;
+        // 🔒 Solo SuperAdmin, y solo con el motivo ya registrado en
+        // erasureLog para ESTE estudiante (derecho de eliminación, LOPDP).
+        // Ningún otro rol puede borrar una ficha, nunca.
+        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, studentId);
       }
 
       // ─── ATENCIONES ────────────────────────────────────────────────────
@@ -146,7 +171,12 @@ service cloud.firestore {
                         onlyChanges(['family','updatedAt','updatedBy'])
                         || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
                       );
-        allow delete: if false;
+        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+        // estudiante de ESTE registro (resource.data: el documento previo
+        // al borrado). Sin studentId (registro huérfano nunca enlazado) no
+        // hay forma de que exista el log correspondiente: queda protegido
+        // por defecto, no expuesto por descuido.
+        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
       }
 
       // ─── ALERTAS ───────────────────────────────────────────────────────
@@ -167,7 +197,9 @@ service cloud.firestore {
                         ])
                         || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
                       );
-        allow delete: if false;
+        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+        // estudiante de esta alerta.
+        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
       }
 
       // ─── INVENTARIO ────────────────────────────────────────────────────
@@ -178,8 +210,18 @@ service cloud.firestore {
         allow create: if canWrite(schoolId)
                       && authoredByCaller(request.resource.data)
                       && sanePastTimestamp(request.resource.data);
+        // V42.0.1 — Este update no tenía onlyChanges() ni autoría verificada:
+        // `stock` se podía reescribir a cualquier valor, en silencio y sin
+        // dejar rastro en inventoryLog. El comentario de arriba afirma que
+        // "cada movimiento deja rastro inmutable", y hasta ahora no era
+        // cierto. Se acotan los campos y se valida que stock sea un número
+        // no negativo.
         allow update: if canWrite(schoolId)
-                      && request.resource.data.createdBy == resource.data.createdBy;
+                      && updateAuthoredByCaller()
+                      && request.resource.data.createdBy == resource.data.createdBy
+                      && request.resource.data.stock is number
+                      && request.resource.data.stock >= 0
+                      && onlyChanges(['stock','min','name','category','expires','status','updatedAt','updatedBy']);
         allow delete: if false;
       }
 
@@ -193,7 +235,9 @@ service cloud.firestore {
                       && sanePastTimestamp(request.resource.data);
         allow update: if isSuperAdmin()
                       && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']);
-        allow delete: if false;
+        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+        // estudiante de este movimiento.
+        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
       }
 
       // ─── VACUNAS ───────────────────────────────────────────────────────
@@ -204,7 +248,28 @@ service cloud.firestore {
                       && sanePastTimestamp(request.resource.data);
         allow update: if canWrite(schoolId)
                       && request.resource.data.createdBy == resource.data.createdBy;
-        allow delete: if false;
+        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+        // estudiante de este registro de vacunación.
+        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+      }
+
+      // ─── REGISTRO DE ELIMINACIÓN (derecho de eliminación · LOPDP) ───────
+      // Un documento por estudiante, con studentId como ID del documento
+      // (hasErasureLog() lo busca por ese path directamente). Create-only:
+      // nunca se actualiza ni se borra, así que sigue existiendo como
+      // prueba incluso después de que el resto de los datos del estudiante
+      // se haya borrado. Solo SuperAdmin — ni Admin_Colegio ni
+      // Personal_Salud pueden solicitar ni registrar una eliminación.
+      match /erasureLog/{studentId} {
+        allow read:   if isSuperAdmin();
+        allow create: if isSuperAdmin()
+                      && authoredByCaller(request.resource.data)
+                      && sanePastTimestamp(request.resource.data)
+                      && request.resource.data.studentId == studentId
+                      && request.resource.data.reason is string
+                      && request.resource.data.reason.size() >= 10
+                      && request.resource.data.reason.size() <= 500;
+        allow update, delete: if false;
       }
 
       // ─── METADATOS OPERATIVOS ──────────────────────────────────────────

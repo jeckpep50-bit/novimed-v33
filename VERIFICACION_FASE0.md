@@ -11,7 +11,7 @@ Antes de ejecutar los pasos manuales del RUNBOOK (`RUNBOOK.md §7`, que requiere
 
 ## 3. Reglas vs. código, probado contra el emulador de Firestore (no a ojo)
 
-Se añadió `tests/firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
+Se añadió `firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
 
 Cubre:
 - **Las 3 simulaciones que `RUNBOOK.md §7.1` exige correr en el Rules Playground** antes de publicar (`delete` sobre `students` → deniega; `create` en `careRecords` con `createdBy.uid` ajeno → deniega; archivado con `archivedReason` vacío → deniega), ahora automatizadas y repetibles en cada cambio de reglas.

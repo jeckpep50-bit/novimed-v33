@@ -54,7 +54,7 @@ Ya diseñada completa en `ROADMAP_V42.md`. Resumen de la secuencia (cada entrega
 
 El propio roadmap recomienda **adelantar aquí las pruebas mínimas de la Fase 2** (`calculateRisk`, `inventoryStatus`, reglas en el emulador de Firestore) antes de tocar el núcleo del panel — es la parte de V44 con mayor retorno por hora invertida, y evita repetir el patrón que generó los defectos C1/C2/C5. Se adopta esa recomendación: **Fase 1 empieza con un arnés de pruebas mínimo, no con código de producto.**
 
-**Estado:** arnés de pruebas construido (`tests/firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `scripts/smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
+**Estado:** arnés de pruebas construido (`firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
 
 ### Fase 2 — V43: lo que queda de la auditoría original
 - A3: decidir Riesgo y Vacunas (completarlos o retirarlos — hoy están muertos en producción, y un módulo muerto en un producto que se vende es peor que no tenerlo).

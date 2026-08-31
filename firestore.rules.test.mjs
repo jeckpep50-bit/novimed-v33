@@ -364,6 +364,75 @@ test("un registro huérfano (sin studentId) no se puede borrar aunque haya erasu
 
 // ─── Hallazgo del cruce reglas↔código (ver PLAN_DE_TRABAJO.md) ─────────────
 
+/* ══════════════════════════════════════════════════════════════════════
+   V42.0.1 — Pruebas de los huecos cerrados en esta versión.
+   Se añaden JUNTO a la corrección, no después: una regla endurecida sin
+   test que la ejerza es una regla que nadie sabe si sigue vigente.
+   ══════════════════════════════════════════════════════════════════════ */
+
+test("alerts: un update sin updatedBy verificado se deniega (autoría)", async () => {
+  await seed(SCHOOL_A, "alerts/al-auth", { status: "pending", createdAt: Date.now(), createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  // Sin updatedBy: antes se aceptaba, y con ello `attendedBy` era un campo
+  // que el cliente afirmaba sin verificación alguna.
+  await assertFails(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-auth`), {
+      status: "attended", attendedAt: Date.now(), attendedBy: { uid: "otro" }
+    })
+  );
+});
+
+test("alerts: no se puede atribuir la atención a otro uid", async () => {
+  await seed(SCHOOL_A, "alerts/al-suplant", { status: "pending", createdAt: Date.now(), createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-suplant`), {
+      status: "attended", attendedAt: Date.now(),
+      updatedAt: new Date(), updatedBy: { uid: "medico-que-no-soy" }
+    })
+  );
+});
+
+test("alerts: no se puede devolver una alerta atendida a 'pending'", async () => {
+  await seed(SCHOOL_A, "alerts/al-estado", { status: "attended", createdAt: Date.now(), createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  // Revertir el estado borraría la medición de tiempo de respuesta.
+  await assertFails(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-estado`), {
+      status: "pending", updatedAt: new Date(), updatedBy: { uid: "health1" }
+    })
+  );
+});
+
+test("inventory: no se puede reescribir el stock sin autor verificado", async () => {
+  await seed(SCHOOL_A, "inventory/med1", { name: "Paracetamol", stock: 10, createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med1`), { stock: 999 })
+  );
+});
+
+test("inventory: el descuento de invUse (stock + updatedBy) sigue aceptándose", async () => {
+  await seed(SCHOOL_A, "inventory/med2", { name: "Suero", stock: 10, createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  // Forma exacta que envía sync.js en el writeBatch de invUse.
+  await assertSucceeds(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med2`), {
+      stock: 9, updatedAt: new Date(), updatedBy: { uid: "health1" }
+    })
+  );
+});
+
+test("inventory: un stock negativo se deniega", async () => {
+  await seed(SCHOOL_A, "inventory/med3", { name: "Gasas", stock: 1, createdBy: { uid: "health1" } });
+  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+  await assertFails(
+    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med3`), {
+      stock: -5, updatedAt: new Date(), updatedBy: { uid: "health1" }
+    })
+  );
+});
+
 test("BRECHA CONOCIDA (rastreada para V43/A3): update en vaccines no tiene lista de campos permitidos", async () => {
   await seed(SCHOOL_A, "vaccines/vac1", { studentId: "stu1", createdBy: { uid: "health1" } });
   const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();

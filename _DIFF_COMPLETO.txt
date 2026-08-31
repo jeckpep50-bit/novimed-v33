@@ -1,0 +1,1635 @@
+diff --git a/CAMBIOS.diff b/CAMBIOS.diff
+deleted file mode 100644
+index e6dc3f5..0000000
+--- a/CAMBIOS.diff
++++ /dev/null
+@@ -1,136 +0,0 @@
+-diff --git a/CHANGELOG.md b/CHANGELOG.md
+-index 16c9643..eadebb7 100644
+---- a/CHANGELOG.md
+-+++ b/CHANGELOG.md
+-@@ -5,9 +5,9 @@
+- Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta es la fase 1, sin riesgo por diseño: se sigue escribiendo en `active-case` igual que antes).
+- 
+- - **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
+--- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `scripts/smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+-+- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+- - Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
+--- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `tests/firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `scripts/smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+-+- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+- 
+- ## V41.1 — Vista Docente: formulario real
+- 
+-diff --git a/PLAN_DE_TRABAJO.md b/PLAN_DE_TRABAJO.md
+-index a898281..576e8cc 100644
+---- a/PLAN_DE_TRABAJO.md
+-+++ b/PLAN_DE_TRABAJO.md
+-@@ -54,7 +54,7 @@ Ya diseñada completa en `ROADMAP_V42.md`. Resumen de la secuencia (cada entrega
+- 
+- El propio roadmap recomienda **adelantar aquí las pruebas mínimas de la Fase 2** (`calculateRisk`, `inventoryStatus`, reglas en el emulador de Firestore) antes de tocar el núcleo del panel — es la parte de V44 con mayor retorno por hora invertida, y evita repetir el patrón que generó los defectos C1/C2/C5. Se adopta esa recomendación: **Fase 1 empieza con un arnés de pruebas mínimo, no con código de producto.**
+- 
+--**Estado:** arnés de pruebas construido (`tests/firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `scripts/smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
+-+**Estado:** arnés de pruebas construido (`firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
+- 
+- ### Fase 2 — V43: lo que queda de la auditoría original
+- - A3: decidir Riesgo y Vacunas (completarlos o retirarlos — hoy están muertos en producción, y un módulo muerto en un producto que se vende es peor que no tenerlo).
+-diff --git a/ROADMAP_V42.md b/ROADMAP_V42.md
+-index d136dcb..5e1e895 100644
+---- a/ROADMAP_V42.md
+-+++ b/ROADMAP_V42.md
+-@@ -49,7 +49,7 @@ La app empieza a **leer** de `alerts` y sigue **escribiendo** en `active-case`.
+- - Nuevo estado: `state.activeAlertId` (la alerta enfocada) y `state.pendingAlerts` (derivado de `state.alerts`).
+- - Implementado como una fuente **doble**, no como reemplazo: `mapFirestoreToLocalState()` (sync.js) sigue aportando la señal inmediata al iniciar sesión, y `applyQueueDerivedFocus()` (core.js, nueva, corre al inicio de cada `renderAll()`) resuelve desde `state.alerts` por `activeAlertId` con fallback a la `pending` más reciente, y GANA cuando resuelve. `activeAlert()` en sí no cambió de firma — sigue leyendo `state.currentAlert` — pero ese campo ahora lo mantienen ambas fuentes, no solo el documento. Se descubrió en la práctica que la versión "solo cola, sin fuente inmediata" dejaba un parpadeo a neutro entre el primer snapshot del caso y la conexión del listener de `alerts`; de ahí el diseño final.
+- - `renderAll()` deriva héroe y banderas (`alertSent`/`careSaved`/`familyRead`) de la cola cuando resuelve; el KPI de alertas (`kpiAlerts`) ya las derivaba de `state.alerts` desde antes de V42.
+--- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `scripts/smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
+-+- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
+- 
+- ### V42.1 — Corte de escritura
+- Se deja de escribir en `active-case` y se elimina el código muerto.
+-diff --git a/VERIFICACION_FASE0.md b/VERIFICACION_FASE0.md
+-index 358042c..49421ae 100644
+---- a/VERIFICACION_FASE0.md
+-+++ b/VERIFICACION_FASE0.md
+-@@ -11,7 +11,7 @@ Antes de ejecutar los pasos manuales del RUNBOOK (`RUNBOOK.md §7`, que requiere
+- 
+- ## 3. Reglas vs. código, probado contra el emulador de Firestore (no a ojo)
+- 
+--Se añadió `tests/firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
+-+Se añadió `firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
+- 
+- Cubre:
+- - **Las 3 simulaciones que `RUNBOOK.md §7.1` exige correr en el Rules Playground** antes de publicar (`delete` sobre `students` → deniega; `create` en `careRecords` con `createdBy.uid` ajeno → deniega; archivado con `archivedReason` vacío → deniega), ahora automatizadas y repetibles en cada cambio de reglas.
+-diff --git a/package.json b/package.json
+-index 63f68e1..c6bd632 100644
+---- a/package.json
+-+++ b/package.json
+-@@ -7,8 +7,10 @@
+-     "dev": "vite",
+-     "build": "vite build",
+-     "preview": "vite preview",
+--    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test tests/firestore.rules.test.mjs\"",
+--    "test:smoke": "firebase emulators:exec --project demo-novimed \"node scripts/smoke-test.mjs\""
+-+    "test": "npm run test:rules && npm run test:smoke",
+-+    "test:rules": "firebase emulators:exec --project demo-novimed \"node --test firestore.rules.test.mjs\"",
+-+    "test:smoke": "firebase emulators:exec --project demo-novimed \"node smoke-test.mjs\"",
+-+    "test:browsers": "playwright install chromium"
+-   },
+-   "dependencies": {
+-     "firebase": "^12.0.0"
+-diff --git a/smoke-test.mjs b/smoke-test.mjs
+-index 263edda..fcd4ec2 100644
+---- a/smoke-test.mjs
+-+++ b/smoke-test.mjs
+-@@ -6,7 +6,7 @@
+-  * (activado por firebase.json + sync.js) y usa firebase-admin apuntado a
+-  * los emuladores (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST)
+-  * para sembrar datos de prueba. Pensado para correr dentro de
+-- * `firebase emulators:exec "node scripts/smoke-test.mjs"` (ver
+-+ * `firebase emulators:exec "node smoke-test.mjs"` (ver
+-  * package.json → test:smoke), que levanta y apaga los emuladores solo.
+-  *
+-  * Dos escenarios:
+-@@ -20,8 +20,16 @@
+-  *     del documento único.
+-  */
+- import { spawn, execSync } from "node:child_process";
+-+import { mkdirSync } from "node:fs";
+- import { chromium } from "playwright";
+- 
+-+/* Las capturas iban a `scripts/`, un directorio que no existe en el repo:
+-+   page.screenshot() lanzaba ENOENT y abortaba la corrida DESPUÉS de que el
+-+   escenario ya había pasado. Se escribe en un directorio propio que el
+-+   test crea, para que la salida no dependa del layout del repositorio. */
+-+const SHOT_DIR = "smoke-out";
+-+mkdirSync(SHOT_DIR, { recursive: true });
+-+
+- const PORT = 5183;
+- const BASE_URL = `http://127.0.0.1:${PORT}`;
+- const PROJECT_ID = "demo-novimed";
+-@@ -169,7 +177,14 @@ async function main() {
+-     // (browserRef se enlaza justo después de lanzar Chromium, más abajo)
+-     await waitForServer(BASE_URL, 20000);
+-     console.log("→ vite listo. Abriendo Chromium…");
+--    browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+-+    /* Sin PLAYWRIGHT_CHROMIUM_PATH se usa el Chromium que gestiona la propia
+-+       Playwright (`npm run test:browsers`), que es lo que funciona en un
+-+       equipo normal y en CI. La variable existe solo para entornos donde el
+-+       binario vive fuera de la caché de Playwright: fijar una ruta absoluta
+-+       en el código hacía que este test solo pudiera correr en la máquina
+-+       donde se escribió. */
+-+    const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+-+    browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {});
+-     browserRef = browser;
+- 
+-     // Contextos separados por escenario: son "dos dispositivos distintos"
+-@@ -192,7 +207,7 @@ async function main() {
+-     );
+-     const demoHero = await demoPage.textContent("#mainStudentName");
+-     const demoKpi = await demoPage.textContent("#kpiAlerts");
+--    await demoPage.screenshot({ path: "scripts/smoke-demo.png", fullPage: true });
+-+    await demoPage.screenshot({ path: `${SHOT_DIR}/smoke-demo.png`, fullPage: true });
+-     console.log(`  [demo] mainStudentName="${demoHero}" kpiAlerts="${demoKpi}"`);
+-     await demoPage.close();
+-     await demoCtx.close();
+-@@ -274,7 +289,7 @@ async function main() {
+-     }
+-     const afterHero = await realPage.textContent("#mainStudentName");
+-     const afterMeta = await realPage.textContent("#mainStudentMeta");
+--    await realPage.screenshot({ path: "scripts/smoke-real-after-delete.png", fullPage: true });
+-+    await realPage.screenshot({ path: `${SHOT_DIR}/smoke-real-after-delete.png`, fullPage: true });
+-     console.log(`  [real] Sin active-case, tras recarga → mainStudentName="${afterHero}" mainStudentMeta="${afterMeta}"`);
+-     await realPage.close();
+-     await realCtx.close();
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 1a94f1a..b654d54 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,12 +1,93 @@
+ # NOVIMED — Changelog
+ 
++## V42.0.1 — Hotfix de verdad clínica, navegación y reglas
++
++Corrige defectos que sobrevivieron a las barridas de V40.1 y V41 y que solo
++se manifiestan en una institución real, nunca en la demo de ventas.
++
++**Bloqueantes (P0)**
++- **Panel directivo (`core.js`, `renderRoles`)**: mostraba en TODA institución
++  «96% de lectura», «2 casos críticos», «2m 34s de respuesta» y una tabla
++  titulada *Trazabilidad del caso Sofía Martínez* con horas fijas. No estaba
++  protegido por `isDemoTenant()`. Ahora los cuatro KPIs y la trazabilidad se
++  derivan de `alerts`/`careRecords` con autoría real, y la ausencia de datos
++  se declara («—», «sin mediciones aún») en vez de rellenarse.
++- **Feed de actividad (`sync.js`, `mapFirestoreToLocalState`)**: inyectaba
++  «Andrés Sánchez recibió alerta» y «Ana Martínez pendiente de lectura» en
++  cualquier colegio, atribuyendo actos a personas inexistentes. Usa ahora el
++  autor real (`updatedBy`, disponible desde V41) o texto impersonal.
++- **Caída total de la interfaz por un documento de vacunas sin `status`**:
++  `v.status.includes()` lanzaba `TypeError` dentro de `renderAll()`, que no
++  tenía ningún aislamiento, abortando el ciclo completo (KPIs, héroe,
++  reportes) sin error visible. Se normaliza en el mapper y **cada sección de
++  `renderAll()` queda aislada**: la que falle se registra y el resto se
++  actualiza igual.
++- **El enlace atención↔alerta se persistía como `null`**: `submitCare` en
++  `sync.js` no esperaba al `addDoc` de la atención antes de escribir
++  `careRecordId`, así que el FK que V41 introdujo quedaba vacío en Firestore
++  y se perdía al recargar. La función local devuelve ahora su promesa y se
++  espera antes de enlazar.
++
++**Producto (P1)**
++- **Módulo Riesgo revivido**: `state.riskProfiles` se vaciaba al activar un
++  tenant real y nada volvía a llenarlo — tabla vacía sin estado vacío,
++  contadores en 0/0/0 y el KPI de Reportes fijo en 0. Se deriva ahora de
++  fichas + alertas + atenciones. `calculateRisk()` no cambia.
++- **Prioridad real (cierra A4)**: se escribía siempre `"Alta"`, de modo que
++  el gráfico «Alertas por prioridad» no podía mostrar otra cosa. Selector
++  Alta/Media/Baja con el criterio explícito junto a cada opción.
++- **Navegación**: Atenciones, Riesgo, Vacunas e Inventario existían como
++  páginas pero no tenían entrada en el menú; el registro médico escolar solo
++  se alcanzaba desde un botón dentro de una tarjeta. 11 páginas, 11 entradas.
++- **Atención sin matrícula**: `submitCare` caía a `students[0]` (undefined) y
++  creaba un registro clínico huérfano con `studentId: null`. Se bloquea en
++  `openAttentionModal()`.
++- **Acoplamiento de render**: `renderRoles` copiaba el HTML de `#familyNotices`,
++  que el render selectivo de V39 podía no haber actualizado. Se fuerza el
++  render de origen antes de copiar.
++- **Cola offline**: `queueRunning` no se liberaba en un `finally`; una
++  excepción inesperada dejaba la cola bloqueada el resto de la sesión.
++
++**Reglas de Firestore**
++- `alerts`: el `update` no exigía `updateAuthoredByCaller()` — `attendedBy` y
++  `familyConfirmedBy` eran campos que el cliente afirmaba sin verificación,
++  contra el principio nº 4 del propio archivo. Y `status` admitía cualquier
++  cadena: se podía devolver una alerta a `pending` y borrar su medición de
++  respuesta. Ambos cerrados; se añaden los campos de cierre de V42.2.
++- `inventory`: el `update` no tenía `onlyChanges()` ni autoría, así que
++  `stock` se podía reescribir en silencio sin rastro en `inventoryLog` — pese
++  a que el comentario del archivo afirmaba lo contrario. Campos acotados,
++  autor verificado y `stock` validado como número no negativo.
++- **6 pruebas nuevas** que ejercen exactamente estos tres huecos (33 casos en
++  total), incluida una que confirma que el descuento real de `invUse` sigue
++  aceptándose.
++- *No* se toca `vaccines`: su brecha está deliberadamente documentada por un
++  test que asserta el comportamiento actual y rastreada para V43/A3. Cerrarla
++  aquí rompería ese test sin cerrar el módulo, que sigue muerto en producción.
++
++**Higiene del repositorio**
++- `firestore.rules 2.txt`, `smoke-test.js` y `gitignore` eran renombrados
++  accidentales de la subida web desde iPad: los archivos correctos existían
++  con el nombre equivocado, así que las reglas nuevas no estaban activas,
++  `test:smoke` ejecutaba la versión rota y el `.gitignore` no surtía efecto.
++  Restaurados. `CAMBIOS.diff` eliminado del repositorio.
++- Referencias a `tests/` y `scripts/` corregidas en CHANGELOG, PLAN_DE_TRABAJO,
++  ROADMAP_V42 y VERIFICACION_FASE0: esos directorios nunca existieron.
++- `NOVIMED_VERSION` y `package.json` alineados en 42.0.1. El marcador del
++  panel Sistema vuelve a servir para verificar despliegues.
++
++**Pendiente, no incluido aquí**: limpieza de `localStorage` al cerrar sesión
++(PHI de menores persiste en iPads compartidos tras el logout — bloqueante
++legal antes del piloto), consolidación de los 129 `!important` de `main.css`,
++y el contraste de `--muted` (#71819b = 3,95:1, falla WCAG AA).
++
+ ## Reglas — Derecho de eliminación (LOPDP)
+ 
+ Hasta ahora ningún historial clínico podía borrarse, ni siquiera con rol SuperAdmin (`allow delete: if false;` en todas las colecciones clínicas). Eso es correcto como postura por defecto, pero deja sin forma técnica de atender el derecho de eliminación de datos personales (LOPDP, Ecuador) cuando un padre o tutor lo solicita para su hijo.
+ 
+ - **Nueva colección `erasureLog/{studentId}`**: un documento por estudiante, con el `studentId` como ID del documento. Solo `SuperAdmin` puede crearlo (autoría verificada, motivo de 10 a 500 caracteres). **Create-only**: nunca se puede actualizar ni borrar, así que sigue existiendo como prueba permanente incluso después de que el resto de los datos del estudiante se haya borrado.
+ - **El borrado real de `students`, `careRecords`, `alerts`, `vaccines` e `inventoryLog` ahora requiere dos condiciones a la vez**: rol `SuperAdmin` (nunca `Admin_Colegio` ni `Personal_Salud`), y que ya exista `erasureLog/{studentId}` para ese estudiante. Las reglas lo exigen directamente vía `exists()` — no es solo disciplina de procedimiento, un intento de borrar sin el registro previo se deniega en el servidor. Un registro huérfano (sin `studentId`, nunca enlazado a una ficha) queda protegido por defecto: no hay forma de que exista el `erasureLog` correspondiente.
+-- 9 pruebas nuevas contra el emulador de Firestore (`tests/firestore.rules.test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
++- 9 pruebas nuevas contra el emulador de Firestore (`firestore.rules.test.mjs`, 27/27 en total): que ni `Admin_Colegio` ni `Personal_Salud` puedan crear el registro, que el motivo corto o el ID no coincidente se rechacen, que el registro sea inmutable, que `SuperAdmin` no pueda borrar sin el registro y sí pueda una vez creado (para las 5 colecciones), y que un huérfano sin `studentId` no se pueda borrar aunque existan registros de otros estudiantes.
+ - **Falta lo legal, no lo técnico**: cómo se verifica que quien pide el borrado es realmente el padre o tutor, plazos de respuesta, y si aplica alguna excepción de retención — ver `PLAN_DE_TRABAJO.md`, Fase 5.
+ - `RUNBOOK.md §7.1` gana una cuarta simulación obligatoria en el Rules Playground antes de publicar: `SuperAdmin` intentando borrar sin `erasureLog` previo debe denegarse.
+ 
+@@ -15,9 +96,9 @@ Hasta ahora ningún historial clínico podía borrarse, ni siquiera con rol Supe
+ Primera entrega de `ROADMAP_V42.md` (cierra el crítico C4 en cuatro fases; esta es la fase 1, sin riesgo por diseño: se sigue escribiendo en `active-case` igual que antes).
+ 
+ - **`activeAlert()` deja de depender solo de `meta/active-case`.** El héroe, sus banderas (`alertSent`/`careSaved`/`familyRead`) y el foco (`state.activeAlertId`, nuevo) se derivan ahora también de la cola real `alerts` en `applyQueueDerivedFocus()` (`core.js`, invocada al inicio de cada `renderAll()`). Diseño deliberadamente **dual, no destructivo**: el documento único sigue siendo la señal inmediata al iniciar sesión (`mapFirestoreToLocalState`, `sync.js`), y la cola es la señal resiliente que gana cuando resuelve — si el documento se borra o vuelve a un payload neutro, `state.activeAlertId` (pegajoso, igual que `currentAlertDocId`) sigue apuntando a la alerta real y `resolveActiveAlertFromQueue()` la recupera de `state.alerts`.
+-- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `scripts/smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
++- **Criterio de aceptación verificado con navegador real**, no solo por lectura de código: `smoke-test.mjs` (`npm run test:smoke`) levanta Firestore + Auth emulator, siembra una institución con una alerta pendiente real, confirma que el héroe la muestra, **borra `active-case` a mano y recarga la página desde cero** (sin nada en memoria) — el héroe sigue mostrando la alerta correcta porque la lee de la cola. La demo `eight-demo` se verifica en paralelo: su guion de ventas (Sofía Martínez) sigue intacto, tal como exige `ROADMAP_V42.md §5`.
+ - Un defecto real se encontró y cerró en el proceso: la primera versión de este cambio dejaba el héroe en un `renderAll()` transitorio en neutro entre el momento en que `startRealtimeSync()` recibe el documento y el momento en que `attachCollectionListeners()` conecta el listener de `alerts` — el fallback "conservar el valor previo" no cubría ese instante porque `mapFirestoreToLocalState` había dejado de escribir la señal inmediata. Se corrigió manteniendo ambas fuentes activas (ver arriba).
+-- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `tests/firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `scripts/smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
++- Infraestructura de pruebas nueva, reutilizable a partir de aquí: `firestore.rules.test.mjs` (17 casos contra el emulador real de Firestore, `npm run test:rules`) y `smoke-test.mjs` (smoke E2E de navegador contra Firestore + Auth emulator, `npm run test:smoke`). Ambos exigen `VITE_USE_EMULATOR=true` explícito (inerte por defecto, mismo patrón defensivo que App Check) — nunca tocan el proyecto Firebase real.
+ 
+ ## V41.1 — Vista Docente: formulario real
+ 
+diff --git a/PLAN_DE_TRABAJO.md b/PLAN_DE_TRABAJO.md
+index 62a7a25..7d36f2d 100644
+--- a/PLAN_DE_TRABAJO.md
++++ b/PLAN_DE_TRABAJO.md
+@@ -54,7 +54,7 @@ Ya diseñada completa en `ROADMAP_V42.md`. Resumen de la secuencia (cada entrega
+ 
+ El propio roadmap recomienda **adelantar aquí las pruebas mínimas de la Fase 2** (`calculateRisk`, `inventoryStatus`, reglas en el emulador de Firestore) antes de tocar el núcleo del panel — es la parte de V44 con mayor retorno por hora invertida, y evita repetir el patrón que generó los defectos C1/C2/C5. Se adopta esa recomendación: **Fase 1 empieza con un arnés de pruebas mínimo, no con código de producto.**
+ 
+-**Estado:** arnés de pruebas construido (`tests/firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `scripts/smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
++**Estado:** arnés de pruebas construido (`firestore.rules.test.mjs`, 17 casos contra el emulador real de Firestore; `smoke-test.mjs`, smoke E2E de navegador contra Firestore + Auth emulator — ninguno de los dos toca nunca el proyecto Firebase real) y **V42.0 entregado y verificado con navegador real**, no solo por lectura de código — ver `CHANGELOG.md` y `ROADMAP_V42.md §3`. Quedan V42.1–V42.3.
+ 
+ ### Fase 2 — V43: lo que queda de la auditoría original
+ - A3: decidir Riesgo y Vacunas (completarlos o retirarlos — hoy están muertos en producción, y un módulo muerto en un producto que se vende es peor que no tenerlo).
+diff --git a/ROADMAP_V42.md b/ROADMAP_V42.md
+index d136dcb..5e1e895 100644
+--- a/ROADMAP_V42.md
++++ b/ROADMAP_V42.md
+@@ -49,7 +49,7 @@ La app empieza a **leer** de `alerts` y sigue **escribiendo** en `active-case`.
+ - Nuevo estado: `state.activeAlertId` (la alerta enfocada) y `state.pendingAlerts` (derivado de `state.alerts`).
+ - Implementado como una fuente **doble**, no como reemplazo: `mapFirestoreToLocalState()` (sync.js) sigue aportando la señal inmediata al iniciar sesión, y `applyQueueDerivedFocus()` (core.js, nueva, corre al inicio de cada `renderAll()`) resuelve desde `state.alerts` por `activeAlertId` con fallback a la `pending` más reciente, y GANA cuando resuelve. `activeAlert()` en sí no cambió de firma — sigue leyendo `state.currentAlert` — pero ese campo ahora lo mantienen ambas fuentes, no solo el documento. Se descubrió en la práctica que la versión "solo cola, sin fuente inmediata" dejaba un parpadeo a neutro entre el primer snapshot del caso y la conexión del listener de `alerts`; de ahí el diseño final.
+ - `renderAll()` deriva héroe y banderas (`alertSent`/`careSaved`/`familyRead`) de la cola cuando resuelve; el KPI de alertas (`kpiAlerts`) ya las derivaba de `state.alerts` desde antes de V42.
+-- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `scripts/smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
++- **Criterio de aceptación, verificado con navegador real contra el emulador de Firestore + Auth** (`npm run test:smoke`, `smoke-test.mjs`), no solo por lectura de código: con `active-case` borrado manualmente y la página **recargada desde cero**, el panel sigue mostrando la alerta correcta. La demo `eight-demo` se verifica en el mismo test y su guion de ventas queda intacto.
+ 
+ ### V42.1 — Corte de escritura
+ Se deja de escribir en `active-case` y se elimina el código muerto.
+diff --git a/VERIFICACION_FASE0.md b/VERIFICACION_FASE0.md
+index 358042c..49421ae 100644
+--- a/VERIFICACION_FASE0.md
++++ b/VERIFICACION_FASE0.md
+@@ -11,7 +11,7 @@ Antes de ejecutar los pasos manuales del RUNBOOK (`RUNBOOK.md §7`, que requiere
+ 
+ ## 3. Reglas vs. código, probado contra el emulador de Firestore (no a ojo)
+ 
+-Se añadió `tests/firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
++Se añadió `firestore.rules.test.mjs` — 17 casos, corridos con `npm run test:rules` contra el emulador real (descarga el jar de Firestore la primera vez, no requiere proyecto ni credenciales). **17/17 pasan.**
+ 
+ Cubre:
+ - **Las 3 simulaciones que `RUNBOOK.md §7.1` exige correr en el Rules Playground** antes de publicar (`delete` sobre `students` → deniega; `create` en `careRecords` con `createdBy.uid` ajeno → deniega; archivado con `archivedReason` vacío → deniega), ahora automatizadas y repetibles en cada cambio de reglas.
+diff --git a/core.js b/core.js
+index c626c06..fd91ee0 100644
+--- a/core.js
++++ b/core.js
+@@ -54,7 +54,7 @@ const state={
+   ]
+ };
+ const roleData={medico:['MG','María González','Departamento médico'],docente:['LC','Laura Castillo','Docente · Aula 3B'],familia:['AM','Ana Martínez','Familia · Representante'],directivo:['DR','Dirección','Panel directivo']};
+-const NOVIMED_VERSION='V41.1';
++const NOVIMED_VERSION='V42.0.1';
+ function el(id){return document.getElementById(id)}
+ 
+ /* V36 — Paginación de tablas (client-side, primera página de 15) */
+@@ -641,12 +641,50 @@ function calculateRisk(profile){
+   }
+   return {score,level,cls,action,factors};
+ }
++/* V42.0.1 — P1-1. `state.riskProfiles` se sembraba en el estado inicial, se
++   vaciaba al activar un tenant real y NADA volvía a llenarlo: en un colegio
++   real la página Riesgo mostraba una tabla vacía sin estado vacío, los
++   contadores en 0/0/0 y el KPI de Reportes fijo en 0. Además buscaba
++   literalmente 'Sofía Martínez'. Ahora el perfil se DERIVA de los datos
++   reales (fichas + alertas + atenciones) en cada render. calculateRisk() no
++   cambia: siempre estuvo bien escrita, solo le faltaba la fuente. */
++function buildRiskProfiles(){
++  const students=activeStudents();
++  if(!students.length)return [];
++  const alerts=Array.isArray(state.alerts)?state.alerts:[];
++  const care=state.careRecords||[];
++  const monthAgo=Date.now()-30*86400000;
++  return students.map(s=>{
++    const mine=alerts.filter(a=>a&&a.studentId===s.id);
++    const openAlert=mine.some(a=>a.status==='pending');
++    const openCase=mine.some(a=>a.status==='attended');
++    const careCountMonth=care.filter(r=>r&&r.studentId===s.id&&(!Number.isFinite(r.createdAt)||r.createdAt>=monthAgo)).length;
++    /* Solo se considera "lectura familiar pendiente" si hay algo que leer. */
++    const closable=mine.filter(a=>a.status==='attended'||a.status==='family_confirmed');
++    const familyRead=closable.length?closable.every(a=>a.status==='family_confirmed'):true;
++    return {
++      student:s.fullName||'Estudiante sin nombre',
++      studentId:s.id||null,
++      course:s.course||'Sin curso registrado',
++      condition:conditionSummary(s),
++      critical:!!(s.allergies||s.chronic),
++      activeAlert:openAlert,
++      openCase,
++      careCountMonth,
++      vaccineStatus:s.vaccineStatus||'',
++      familyRead,
++      action:openAlert?'Atención prioritaria en curso':(careCountMonth>=3?'Revisar patrón de atenciones':'Control regular')
++    };
++  });
++}
+ function syncRiskState(){
+-  const sofia=state.riskProfiles.find(r=>r.student==='Sofía Martínez');
+-  if(sofia){
+-    sofia.openCase=!state.careSaved;
+-    sofia.familyRead=state.familyRead;
++  /* El tenant de ventas conserva su guion sembrado; el resto deriva. */
++  if(isDemoTenant()&&(state.riskProfiles||[]).length&&!Array.isArray(state.alerts)){
++    const demo=state.riskProfiles.find(r=>r.student==='Sofía Martínez');
++    if(demo){demo.openCase=!state.careSaved;demo.familyRead=state.familyRead;}
++    return;
+   }
++  state.riskProfiles=buildRiskProfiles();
+ }
+ function renderRisk(){
+   syncRiskState();
+@@ -660,7 +698,7 @@ function renderRisk(){
+   el('riskHigh').textContent=high;
+   el('riskMedium').textContent=medium;
+   el('riskLow').textContent=low;
+-  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+evaluated.map(({profile,risk})=>{
++  table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Condición</th><th scope="col">Nivel</th><th scope="col">Puntaje</th><th scope="col">Factores</th><th scope="col">Acción</th></tr>'+(evaluated.length?'':emptyRow(6,'Sin fichas activas todavía. El semáforo se construye a partir de la matrícula registrada.'))+evaluated.map(({profile,risk})=>{
+     return `<tr><td>${escapeHtml(profile.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(profile.course)}</span></td><td>${escapeHtml(profile.condition)}</td><td><span class="chip ${risk.cls}">${risk.level}</span></td><td><div class="risk-score"><span>${risk.score}/100</span><div class="risk-meter"><div class="risk-fill ${risk.cls}" style="width:${risk.score}%"></div></div></div></td><td>${escapeHtml(risk.factors.join(', ') || 'sin factores activos')}</td><td>${escapeHtml(profile.action)}</td></tr>`;
+   }).join('');
+   logic.innerHTML=[
+@@ -675,17 +713,22 @@ function renderVaccines(){
+   const table=el('vaccinesTable');
+   const schedule=el('vaccineSchedule');
+   if(!table || !schedule) return;
+-  const ok=state.vaccines.filter(v=>v.status==='Al día').length;
+-  const pending=state.vaccines.filter(v=>v.status.includes('Pendiente')).length;
+-  const review=state.vaccines.filter(v=>v.status.includes('Próxima')).length;
++  /* V42.0.1 — `v.status` podía llegar undefined desde Firestore y
++     `.includes()` lanzaba TypeError dentro de renderAll(), abortando el
++     ciclo completo (KPIs, héroe, reportes) sin error visible. */
++  const vstatus=v=>String((v&&v.status)||'Sin registrar');
++  const ok=state.vaccines.filter(v=>vstatus(v)==='Al día').length;
++  const pending=state.vaccines.filter(v=>vstatus(v).includes('Pendiente')).length;
++  const review=state.vaccines.filter(v=>vstatus(v).includes('Próxima')).length;
+   el('vacTotal').textContent=state.vaccines.length;
+   el('vacOk').textContent=ok;
+   el('vacPending').textContent=pending;
+   el('vacReview').textContent=review;
+   table.innerHTML='<tr><th scope="col">Estudiante</th><th scope="col">Edad</th><th scope="col">Referencia MSP</th><th scope="col">Estado</th><th scope="col">Próxima acción</th></tr>'+state.vaccines.map(v=>{
+-    const cls=v.status==='Al día'?'green':(v.status.includes('Pendiente')?'red':'amber');
+-    return `<tr><td>${escapeHtml(v.student)}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course)}</span></td><td>${escapeHtml(v.age)}</td><td>${escapeHtml(v.reference)}</td><td><span class="chip ${cls}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.next)}</td></tr>`;
+-  }).join('');
++    const st=vstatus(v);
++    const cls=st==='Al día'?'green':(st.includes('Pendiente')?'red':'amber');
++    return `<tr><td>${escapeHtml(v.studentName||v.student||'Sin especificar')}<br><span style="color:#71819b;font-size:12px">${escapeHtml(v.course||'')}</span></td><td>${escapeHtml(v.age||'')}</td><td>${escapeHtml(v.reference||'Sin registrar')}</td><td><span class="chip ${cls}">${escapeHtml(st)}</span></td><td>${escapeHtml(v.next||'Sin registrar')}</td></tr>`;
++  }).join('')||emptyRow(5,'Sin registros de vacunación.');
+   schedule.innerHTML=state.vaccineSchedule.map((v,i)=>`<div class="flow-step"><div class="flow-num">${v[0]}</div><div><b>${v[1]}</b><p>${v[2]}</p></div></div>`).join('')+`<p style="color:#71819b;font-size:12px;line-height:1.45;margin-top:14px">Referencia: Esquema Nacional de Vacunación Ecuador 2025 del Ministerio de Salud Pública. Este módulo registra seguimiento escolar y verificación documental; no diagnostica ni reemplaza la validación del personal de salud.</p>`;
+ }
+ 
+@@ -966,8 +1009,41 @@ function renderTeacherPane(){
+ }
+ function renderRoles(){el('role-medico').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">MG</div><div><h3>Panel médico de atención</h3><p>Desde aquí se consulta Ficha Médica, Registra Atención, Revisa Riesgo, Vacunas e Inventario.</p></div></div><div class="actions"><button type="button" class="btn secondary" onclick="openFichaModal()">Ver ficha médica</button><button type="button" class="btn primary" onclick="openAttentionModal()">Registrar atención</button><button type="button" class="btn secondary" onclick="showPage('riesgo')">Revisar riesgo</button><button type="button" class="btn secondary" onclick="showPage('vacunas')">Control de vacunas</button><button type="button" class="btn secondary" onclick="showPage('inventario')">Medicamentos disponibles</button></div></article><article class="card"><div class="section-head"><h3>Flujo clínico</h3><span class="badge green">Activo</span></div><div class="feed">${state.activities.map(a=>`<div class="event"><time>${escapeHtml(a[0])}</time><div><span class="dot" style="display:block;background:var(--${DOT_COLORS[a[1]]||'blue'})"></span></div><div><b>${escapeHtml(a[2])}</b><p>${escapeHtml(a[3])}</p></div></div>`).join('')}</div></article></div>`;
+ renderTeacherPane();
+-el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
+-el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="green">${state.familyRead?'96%':'94%'}</strong><em>actualizado</em></div><div class="kpi"><small>Casos críticos</small><strong class="red">2</strong><em class="red">seguimiento</em></div><div class="kpi"><small>Respuesta</small><strong>2m 34s</strong><em class="green">mejorando</em></div></div><div class="card"><h3>Trazabilidad del caso Sofía Martínez</h3><br><table class="table"><tr><th>Momento</th><th>Acción</th><th>Responsable</th></tr><tr><td>10:24</td><td>Alerta reportada</td><td>Docente</td></tr><tr><td>10:25</td><td>Ficha consultada</td><td>Departamento médico</td></tr><tr><td>10:27</td><td>Familia notificada</td><td>Novimed</td></tr><tr><td>10:29</td><td>${state.familyRead?'Lectura confirmada':'Lectura pendiente'}</td><td>Familia</td></tr></table></div>`}
++el('role-familia').innerHTML=`<div class="grid"><article class="card"><div class="role-title"><div class="avatar">AM</div><div><h3>Vista familia</h3><p>Recibe información clara y confirma lectura.</p></div></div><div id="familyRoleBox"></div></article><article class="card"><div class="phone"><div class="screen" id="phoneScreenRole"></div></div></article></div>`;
++/* V42.0.1 — P1-4. Este bloque copia el HTML de #familyNotices, pero el
++   render selectivo de V39 se salta renderFamily() cuando la página
++   'familias' no está visible — estando en Roles se copiaba marcado viejo
++   (incluso de otro tenant). Se fuerza el render de origen antes de copiar. */
++renderFamily();
++el('familyRoleBox').innerHTML=el('familyNotices')?el('familyNotices').innerHTML:'';el('phoneScreenRole').innerHTML=el('phoneScreen')?el('phoneScreen').innerHTML:'';
++/* V42.0.1 — P0-1. Este panel mostraba en TODA institución: 96% de lectura,
++   2 casos críticos, 2m 34s de respuesta y una tabla titulada "Trazabilidad
++   del caso Sofía Martínez" con horas fijas. Un rector de un colegio cliente
++   veía un caso inventado presentado como trazabilidad propia. Es el mismo
++   defecto que V40.1 cerró en el héroe y en Familias, superviviente aquí.
++   Ahora todo se deriva de datos reales y la ausencia se declara. */
++const _dirAlerts=Array.isArray(state.alerts)?state.alerts:null;
++const _dirResp=avgResponseMs();
++const _dirRead=familyReadPct();
++const _dirCrit=(state.riskProfiles||[]).map(p=>calculateRisk(p)).filter(r=>r&&r.cls==='red').length;
++const _dash=(v)=>v===null||v===undefined?'—':v;
++el('role-directivo').innerHTML=`<div class="kpis"><div class="kpi"><small>Atenciones hoy</small><strong>${careCountToday()}</strong><em class="green">documentadas</em></div><div class="kpi"><small>Lectura familiar</small><strong class="${_dirRead===null?'':'green'}">${_dirRead===null?'—':_dirRead+'%'}</strong><em>${_dirRead===null?'sin cierres registrados':'sobre atenciones cerradas'}</em></div><div class="kpi"><small>Casos críticos</small><strong class="${_dirCrit?'red':''}">${_dirCrit}</strong><em class="${_dirCrit?'red':'green'}">${_dirCrit?'en seguimiento':'ninguno activo'}</em></div><div class="kpi"><small>Respuesta</small><strong>${_dirResp?formatDuration(_dirResp.avg):'—'}</strong><em>${_dirResp?(_dirResp.n===1?'1 caso medido':_dirResp.n+' casos medidos'):'sin mediciones aún'}</em></div></div>`
+++`<div class="card"><div class="section-head"><h3>Trazabilidad del último caso</h3><span class="badge blue">Datos reales</span></div><br>${_dirTrace()}</div>`}
++/* La trazabilidad se construye a partir de la alerta enfocada y su autoría
++   real (createdBy/attendedBy, disponibles desde V41). Si no hay caso, se
++   dice que no lo hay en vez de rellenar la tabla. */
++function _dirTrace(){
++  const alerts=Array.isArray(state.alerts)?state.alerts:null;
++  const a=alerts&&(alerts.find(x=>x&&x.id===state.activeAlertId)||alerts[0]);
++  if(!a)return '<p style="color:#71819b;font-size:13px;line-height:1.5">Aún no hay alertas registradas en esta institución. Cuando se reporte la primera, aquí aparecerá su recorrido completo con hora y responsable de cada paso.</p>';
++  const who=st=>escapeHtml((st&&(st.email||st.role))||'Sin registrar');
++  const rows=[['Alerta reportada',a.timeLabel,who(a.createdBy)]];
++  if(a.attendedTimeLabel||a.attendedAt)rows.push(['Atención registrada',a.attendedTimeLabel,who(a.attendedBy||a.createdBy)]);
++  if(a.status==='family_confirmed')rows.push(['Lectura familiar confirmada',a.familyReadTimeLabel,who(a.familyConfirmedBy)]);
++  return '<table class="table"><tr><th scope="col">Momento</th><th scope="col">Acción</th><th scope="col">Responsable</th></tr>'
++    +rows.map(r=>`<tr><td>${escapeHtml(r[1]||'—')}</td><td>${escapeHtml(r[0])}</td><td>${r[2]}</td></tr>`).join('')
++    +'</table>'+(a.status==='pending'?'<p style="color:#71819b;font-size:12px;margin-top:10px">Caso todavía abierto: los pasos siguientes aparecerán a medida que ocurran.</p>':'');
++}
+ 
+ function populateAttentionOptions(){
+   const studentSelect=el('careStudent');
+@@ -1056,9 +1132,27 @@ function renderSystemInfo(){
+   const cr=el('configRole');if(cr)cr.textContent=roleLabel(sessionRole());
+   const ct=el('configCounts');if(ct)ct.textContent=(state.students||[]).length+' estudiantes · '+(state.careRecords||[]).length+' atenciones · '+((state.alerts&&state.alerts.length)||0)+' alertas · '+(state.inventory||[]).length+' ítems de inventario';
+ }
++/* V42.0.1 — renderAll() era un punto único de fallo: no tenía ningún
++   aislamiento, así que una excepción en CUALQUIER sección (p. ej. un
++   documento malformado en vacunas) abortaba el ciclo entero y dejaba KPIs,
++   héroe y reportes con datos viejos, sin error visible para el usuario.
++   Cada sección se aísla ahora: la que falle se registra en consola y el
++   resto de la pantalla sigue actualizándose. */
++function safeSection(name,fn){
++  try{fn();}catch(e){console.error('Fallo al renderizar "'+name+'":',e);}
++}
+ function renderAll(){
+   applyQueueDerivedFocus();
+-  if(state.activities.length>100)state.activities=state.activities.slice(-100);renderFeed();if(shouldRender('renderAlerts'))renderAlerts();if(shouldRender('renderCare'))renderCare();if(shouldRender('renderFamily'))renderFamily();if(shouldRender('renderStudents'))renderStudents();if(shouldRender('renderVaccines'))renderVaccines();if(shouldRender('renderInventory'))renderInventory();if(shouldRender('renderRisk'))renderRisk();if(shouldRender('renderRoles'))renderRoles();const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
++  if(state.activities.length>100)state.activities=state.activities.slice(-100);
++  safeSection('feed',renderFeed);
++  if(shouldRender('renderAlerts'))safeSection('alertas',renderAlerts);
++  if(shouldRender('renderCare'))safeSection('atenciones',renderCare);
++  if(shouldRender('renderFamily'))safeSection('familias',renderFamily);
++  if(shouldRender('renderStudents'))safeSection('estudiantes',renderStudents);
++  if(shouldRender('renderVaccines'))safeSection('vacunas',renderVaccines);
++  if(shouldRender('renderInventory'))safeSection('inventario',renderInventory);
++  if(shouldRender('renderRisk'))safeSection('riesgo',renderRisk);
++  if(shouldRender('renderRoles'))safeSection('roles',renderRoles);const c=activeAlert();if(el('mainStudentName'))el('mainStudentName').textContent=c.studentName;if(el('mainStudentAvatar'))el('mainStudentAvatar').textContent=getInitials(c.studentName);if(el('mainStudentMeta'))el('mainStudentMeta').textContent=c.location;if(el('mainSymptoms'))el('mainSymptoms').textContent=c.symptoms;renderMainAllergyNote();if(Array.isArray(state.alerts)){const pend=state.alerts.filter(a=>a&&a.status==='pending').length;el('kpiAlerts').textContent=String(pend);const sub=el('kpiAlertsSub');if(sub){sub.textContent=pend===0?'sin pendientes':(pend===1?'1 requiere atención':pend+' requieren atención');sub.className=pend===0?'green':'red';}}else if(isDemoTenant()){el('kpiAlerts').textContent=state.careSaved?'2':'3';}else{el('kpiAlerts').textContent='0';const sub=el('kpiAlertsSub');if(sub){sub.textContent='sin pendientes';sub.className='green';}}el('kpiCare').textContent=careCountToday();const _frp=familyReadPct();
+   el('kpiFamily').textContent=_frp!==null?_frp+'%':(isDemoTenant()?(state.familyRead?'96%':'94%'):'—');
+   const hero=el('heroTitle');
+   if(hero)hero.textContent=state.alertSent?((state.currentAlert&&state.currentAlert.studentName)||'Estudiante')+' necesita atención':'Sin alertas activas';
+@@ -1076,7 +1170,7 @@ function renderAll(){
+   const cat=el('chipAtenciones');if(cat&&(!isDemoTenant()||Array.isArray(state.alerts)))cat.textContent=careCountToday()+' atenciones';
+   const cl=el('chipLectura');if(cl)cl.textContent=_frp!==null?_frp+'% lectura':(isDemoTenant()?'94% lectura':'— lectura');
+   const cti=el('chipTiempo');if(cti){if(resp)cti.textContent=formatDuration(resp.avg);else if(!isDemoTenant())cti.textContent='—';}
+-  if(shouldRender('renderReports'))renderReports();el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
++  if(shouldRender('renderReports'))safeSection('reportes',renderReports);el('mainBadge').textContent=state.careSaved?'En seguimiento':'Acción requerida';el('mainBadge').className='badge '+(state.careSaved?'green':'red');renderSystemInfo();forceFullRender=false;persistState()}
+ let lastFocusedBeforeModal=null;
+ function openModal(id){const m=el(id);if(!m)return;lastFocusedBeforeModal=document.activeElement;m.classList.add('open');const box=m.querySelector('.modal-box');if(box){box.setAttribute('tabindex','-1');box.focus({preventScroll:true});}}
+ function closeModal(id){const m=el(id);if(!m)return;m.classList.remove('open');if(lastFocusedBeforeModal&&typeof lastFocusedBeforeModal.focus==='function'){lastFocusedBeforeModal.focus({preventScroll:true});lastFocusedBeforeModal=null;}}/* V40.1 + V41 — El modal de alerta venía prellenado con el caso demo y
+@@ -1099,6 +1193,7 @@ function openReportModal(){
+   if(!guardWrite())return;
+   populateAlertStudentOptions();
+   ['reportRoom','reportSymptoms','reportStudentOther'].forEach(id=>{const n=el(id);if(n)n.value='';});
++  const pn=el('reportPriority');if(pn)pn.value='Media';
+   const f=el('reportStudentOtherField');if(f)f.style.display='none';
+   openModal('reportModal');
+ }
+@@ -1109,15 +1204,31 @@ window.novimedReadAlertForm=function(){
+   const value=sel?sel.value:'';
+   const other=readOptional('reportStudentOther');
+   const linked=value&&value!=='__other__'?studentById(value):null;
++  /* V42.0.1 — P1-2 (A4). La prioridad se escribía siempre como "Alta", así
++     que el gráfico "Alertas por prioridad" no podía mostrar otra cosa. Ahora
++     la elige quien reporta, con el criterio a la vista en el formulario. */
++  const prioNode=el('reportPriority');
++  const prio=prioNode&&['Alta','Media','Baja'].includes(prioNode.value)?prioNode.value:'Media';
+   return {
+     studentId:linked?linked.id:null,
+     studentName:linked?(linked.fullName||'Estudiante sin nombre'):(other||'Estudiante no registrado'),
+     location:readOptional('reportRoom')||'Ubicación sin registrar',
+     symptoms:readOptional('reportSymptoms')||'Síntomas sin especificar',
++    priority:prio,
+     valid:!!(linked||other)
+   };
+ };function openFichaModal(index=0){if(!state.students.length){showToast('Sin fichas','Aún no hay estudiantes registrados. Crea una ficha desde el módulo Estudiantes.');return;}if(!Number.isFinite(index)||index<0||index>=state.students.length)index=0;state.selectedStudentIndex=index;renderFicha(state.students[index]);openModal('fichaModal')}function openAttentionModal(){
+-  if(!guardWrite())return;closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
++  if(!guardWrite())return;
++  /* V42.0.1 — P1-5. Sin matrícula, submitCare() caía a state.students[0]
++     (undefined) y creaba una atención con studentId null y nombre
++     "Estudiante sin nombre": un registro clínico huérfano e inauditable.
++     Se bloquea en el origen en lugar de fabricar el dato. */
++  if(!activeStudents().length){
++    showToast('Sin fichas activas','Registra primero la ficha del estudiante: una atención sin ficha no se puede auditar después.');
++    showPage('estudiantes');
++    return;
++  }
++  closeModal('fichaModal');populateAttentionOptions();clearAttentionForm();openModal('attentionModal')}
+ /**
+  * @typedef {Object} AlertPayload
+  * @property {string|null} studentId   Clave foránea a schools/{id}/students. null = sin ficha enlazada.
+@@ -1181,9 +1292,13 @@ function submitCare(){
+   if(medicationInventoryIndex!==null && Number.isFinite(medicationInventoryIndex)){
+     registerInventoryUse(medicationInventoryIndex,record.studentName,'Administrado en atención médica',false,record.studentId);
+   }
++  /* V42.0.1 — P0-4. Se guarda la promesa y se devuelve al final: sync.js la
++     espera antes de escribir `careRecordId`, que es lo que hacía que el
++     enlace atención↔alerta se persistiera vacío. */
++  let cloudCare=null;
+   if(window.novimedCloudReady && window.novimedCloudAddCareRecord){
+     const opId=window.novimedNewOpId?window.novimedNewOpId():null;
+-    window.novimedCloudAddCareRecord(record,opId).catch(err=>{
++    cloudCare=window.novimedCloudAddCareRecord(record,opId).catch(err=>{
+       console.error('Atención a nube:',err);
+       state.careRecords.unshift({...record,_pendingOpId:opId});
+       renderAll();
+@@ -1198,6 +1313,7 @@ function submitCare(){
+   showSuccess('Atención registrada','La atención médica quedó documentada y la familia fue notificada.');
+   renderAll();
+   showPage('atenciones');
++  return cloudCare;   /* P0-4: sync.js espera esto antes de enlazar la alerta */
+ }
+ /* V41 — confirmFamilyRead escribía sobre state.careRecords[0] (el registro
+    MÁS RECIENTE), no sobre el vinculado al caso: la confirmación podía
+diff --git a/firestore.rules b/firestore.rules
+index 387b0fa..e3093b5 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -6,7 +6,12 @@ rules_version = '2';
+ // PRINCIPIOS
+ //   1. Denegación por defecto. Nada fuera de schools/{schoolId} es accesible.
+ //   2. Aislamiento por institución: el schoolId del claim manda, no la ruta.
+-//   3. Ningún historial clínico se borra. Nunca. Ni con rol SuperAdmin.
++//   3. Ningún historial clínico se borra sin dejar constancia. Solo
++//      SuperAdmin puede borrar (derecho de eliminación — LOPDP — a
++//      solicitud de un padre o tutor). Nunca Admin_Colegio ni Personal_Salud.
++//      Y no puede borrar sin que exista antes un registro en `erasureLog`
++//      con el motivo: las reglas lo exigen, no es solo disciplina de
++//      procedimiento (ver esa colección más abajo).
+ //   4. Ninguna escritura clínica sin autor verificado contra request.auth.uid.
+ //   5. El cliente no puede fechar en el futuro ni falsear al servidor.
+ //
+@@ -78,6 +83,21 @@ service cloud.firestore {
+       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+     }
+ 
++    // ─── Derecho de eliminación (LOPDP) ────────────────────────────────────
++    // `erasureLog/{studentId}` — un documento por estudiante, con el
++    // estudiante como ID del documento (no un id autogenerado). Es lo que
++    // permite verificar "¿ya se registró el motivo para ESTE estudiante?"
++    // con un exists() directo, sin necesitar una consulta. Solo SuperAdmin
++    // puede crearlo, es create-only (nunca se actualiza ni se borra: es la
++    // única prueba que sobrevive después de que el resto de los datos del
++    // estudiante se hayan borrado), y solo entonces el borrado real de
++    // students/careRecords/alerts/vaccines/inventoryLog para ese estudiante
++    // queda permitido más abajo.
++    function hasErasureLog(schoolId, studentId) {
++      return studentId is string && studentId.size() > 0
++          && exists(/databases/$(database)/documents/schools/$(schoolId)/erasureLog/$(studentId));
++    }
++
+     // ═══════════════════════════════════════════════════════════════════
+     //  ÁRBOL MULTI-TENANT
+     // ═══════════════════════════════════════════════════════════════════
+@@ -87,7 +107,10 @@ service cloud.firestore {
+       allow write:  if false;   // el documento raíz del colegio se gestiona fuera de la app
+ 
+       // ─── FICHAS DE ESTUDIANTES ─────────────────────────────────────────
+-      // Nunca se borran. Se archivan con motivo obligatorio y autoría.
++      // La baja normal es el archivado lógico (motivo obligatorio y
++      // autoría), no el borrado. El borrado real existe solo para el
++      // derecho de eliminación (ver erasureLog más abajo): SuperAdmin,
++      // y solo con el motivo ya registrado.
+       match /students/{studentId} {
+         allow read:   if belongsTo(schoolId);
+         allow create: if canWrite(schoolId)
+@@ -126,8 +149,10 @@ service cloud.firestore {
+                         )
+                       );
+ 
+-        // 🔒 Un historial clínico de un menor no se destruye desde un cliente.
+-        allow delete: if false;
++        // 🔒 Solo SuperAdmin, y solo con el motivo ya registrado en
++        // erasureLog para ESTE estudiante (derecho de eliminación, LOPDP).
++        // Ningún otro rol puede borrar una ficha, nunca.
++        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, studentId);
+       }
+ 
+       // ─── ATENCIONES ────────────────────────────────────────────────────
+@@ -146,7 +171,12 @@ service cloud.firestore {
+                         onlyChanges(['family','updatedAt','updatedBy'])
+                         || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+                       );
+-        allow delete: if false;
++        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
++        // estudiante de ESTE registro (resource.data: el documento previo
++        // al borrado). Sin studentId (registro huérfano nunca enlazado) no
++        // hay forma de que exista el log correspondiente: queda protegido
++        // por defecto, no expuesto por descuido.
++        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+       }
+ 
+       // ─── ALERTAS ───────────────────────────────────────────────────────
+@@ -167,7 +197,9 @@ service cloud.firestore {
+                         ])
+                         || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+                       );
+-        allow delete: if false;
++        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
++        // estudiante de esta alerta.
++        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+       }
+ 
+       // ─── INVENTARIO ────────────────────────────────────────────────────
+@@ -178,8 +210,18 @@ service cloud.firestore {
+         allow create: if canWrite(schoolId)
+                       && authoredByCaller(request.resource.data)
+                       && sanePastTimestamp(request.resource.data);
++        // V42.0.1 — Este update no tenía onlyChanges() ni autoría verificada:
++        // `stock` se podía reescribir a cualquier valor, en silencio y sin
++        // dejar rastro en inventoryLog. El comentario de arriba afirma que
++        // "cada movimiento deja rastro inmutable", y hasta ahora no era
++        // cierto. Se acotan los campos y se valida que stock sea un número
++        // no negativo.
+         allow update: if canWrite(schoolId)
+-                      && request.resource.data.createdBy == resource.data.createdBy;
++                      && updateAuthoredByCaller()
++                      && request.resource.data.createdBy == resource.data.createdBy
++                      && request.resource.data.stock is number
++                      && request.resource.data.stock >= 0
++                      && onlyChanges(['stock','min','name','category','expires','status','updatedAt','updatedBy']);
+         allow delete: if false;
+       }
+ 
+@@ -193,7 +235,9 @@ service cloud.firestore {
+                       && sanePastTimestamp(request.resource.data);
+         allow update: if isSuperAdmin()
+                       && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']);
+-        allow delete: if false;
++        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
++        // estudiante de este movimiento.
++        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+       }
+ 
+       // ─── VACUNAS ───────────────────────────────────────────────────────
+@@ -204,7 +248,28 @@ service cloud.firestore {
+                       && sanePastTimestamp(request.resource.data);
+         allow update: if canWrite(schoolId)
+                       && request.resource.data.createdBy == resource.data.createdBy;
+-        allow delete: if false;
++        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
++        // estudiante de este registro de vacunación.
++        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
++      }
++
++      // ─── REGISTRO DE ELIMINACIÓN (derecho de eliminación · LOPDP) ───────
++      // Un documento por estudiante, con studentId como ID del documento
++      // (hasErasureLog() lo busca por ese path directamente). Create-only:
++      // nunca se actualiza ni se borra, así que sigue existiendo como
++      // prueba incluso después de que el resto de los datos del estudiante
++      // se haya borrado. Solo SuperAdmin — ni Admin_Colegio ni
++      // Personal_Salud pueden solicitar ni registrar una eliminación.
++      match /erasureLog/{studentId} {
++        allow read:   if isSuperAdmin();
++        allow create: if isSuperAdmin()
++                      && authoredByCaller(request.resource.data)
++                      && sanePastTimestamp(request.resource.data)
++                      && request.resource.data.studentId == studentId
++                      && request.resource.data.reason is string
++                      && request.resource.data.reason.size() >= 10
++                      && request.resource.data.reason.size() <= 500;
++        allow update, delete: if false;
+       }
+ 
+       // ─── METADATOS OPERATIVOS ──────────────────────────────────────────
+diff --git a/firestore.rules 2.txt b/firestore.rules 2.txt
+deleted file mode 100644
+index 663ae53..0000000
+--- a/firestore.rules 2.txt	
++++ /dev/null
+@@ -1,280 +0,0 @@
+-rules_version = '2';
+-
+-// ═══════════════════════════════════════════════════════════════════════════
+-// NOVIMED — Reglas de seguridad de Firestore (V41.1)
+-//
+-// PRINCIPIOS
+-//   1. Denegación por defecto. Nada fuera de schools/{schoolId} es accesible.
+-//   2. Aislamiento por institución: el schoolId del claim manda, no la ruta.
+-//   3. Ningún historial clínico se borra sin dejar constancia. Solo
+-//      SuperAdmin puede borrar (derecho de eliminación — LOPDP — a
+-//      solicitud de un padre o tutor). Nunca Admin_Colegio ni Personal_Salud.
+-//      Y no puede borrar sin que exista antes un registro en `erasureLog`
+-//      con el motivo: las reglas lo exigen, no es solo disciplina de
+-//      procedimiento (ver esa colección más abajo).
+-//   4. Ninguna escritura clínica sin autor verificado contra request.auth.uid.
+-//   5. El cliente no puede fechar en el futuro ni falsear al servidor.
+-//
+-// ROLES (claims del token): SuperAdmin · Admin_Colegio · Personal_Salud · Consulta
+-// Las sesiones anónimas solo existen dentro del tenant de ventas 'eight-demo'.
+-//
+-// ⚠️ ORDEN DE DESPLIEGUE OBLIGATORIO
+-//    Estas reglas deben publicarse ANTES de desplegar el código de V41.1.
+-//    Si el código llega primero, el archivado lógico y la autoría fallarán
+-//    contra las reglas antiguas. Si las reglas llegan primero, el código
+-//    antiguo sigue funcionando salvo el borrado en duro, que es exactamente
+-//    lo que queremos bloquear. Ver RUNBOOK §7.
+-// ═══════════════════════════════════════════════════════════════════════════
+-
+-service cloud.firestore {
+-  match /databases/{database}/documents {
+-
+-    // ─── Identidad y pertenencia ─────────────────────────────────────────
+-    function signedIn()      { return request.auth != null; }
+-    function claims()        { return request.auth.token; }
+-    function role()          { return signedIn() && 'role' in claims() ? claims().role : 'Anonimo'; }
+-    function isAnonymous()   { return signedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous'; }
+-    function isSuperAdmin()  { return role() == 'SuperAdmin'; }
+-
+-    // El tenant demo es el ÚNICO lugar donde una sesión anónima tiene acceso.
+-    function belongsTo(schoolId) {
+-      return signedIn() && (
+-        isSuperAdmin() ||
+-        ('schoolId' in claims() && claims().schoolId == schoolId) ||
+-        (isAnonymous() && schoolId == 'eight-demo')
+-      );
+-    }
+-
+-    // Consulta = solo lectura. El resto de roles reconocidos pueden escribir.
+-    function canWrite(schoolId) {
+-      return belongsTo(schoolId) &&
+-             (isAnonymous() || role() in ['SuperAdmin', 'Admin_Colegio', 'Personal_Salud']);
+-    }
+-
+-    // ─── Autoría verificada ──────────────────────────────────────────────
+-    // El uid del documento debe ser el uid que ejecuta la escritura. Un
+-    // cliente no puede atribuir un acto clínico a otra persona.
+-    function authoredByCaller(data) {
+-      return 'createdBy' in data
+-          && data.createdBy is map
+-          && 'uid' in data.createdBy
+-          && data.createdBy.uid == request.auth.uid;
+-    }
+-    function updateAuthoredByCaller() {
+-      return 'updatedBy' in request.resource.data
+-          && request.resource.data.updatedBy is map
+-          && request.resource.data.updatedBy.uid == request.auth.uid;
+-    }
+-
+-    // ─── Cronología honesta ──────────────────────────────────────────────
+-    // createdAt es el momento del HECHO CLÍNICO (reloj del cliente), no el de
+-    // la recepción: una atención registrada sin red se sincroniza horas
+-    // después y debe conservar su hora real. Por eso se permite el pasado sin
+-    // límite (registro en diferido) pero nunca el futuro más allá de una
+-    // tolerancia de desfase de reloj de 5 minutos.
+-    function sanePastTimestamp(data) {
+-      return 'createdAt' in data
+-          && data.createdAt is number
+-          && data.createdAt <= request.time.toMillis() + 300000;
+-    }
+-
+-    // Solo cambian los campos listados: el resto del documento es inmutable.
+-    function onlyChanges(allowed) {
+-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+-    }
+-
+-    // ─── Derecho de eliminación (LOPDP) ────────────────────────────────────
+-    // `erasureLog/{studentId}` — un documento por estudiante, con el
+-    // estudiante como ID del documento (no un id autogenerado). Es lo que
+-    // permite verificar "¿ya se registró el motivo para ESTE estudiante?"
+-    // con un exists() directo, sin necesitar una consulta. Solo SuperAdmin
+-    // puede crearlo, es create-only (nunca se actualiza ni se borra: es la
+-    // única prueba que sobrevive después de que el resto de los datos del
+-    // estudiante se hayan borrado), y solo entonces el borrado real de
+-    // students/careRecords/alerts/vaccines/inventoryLog para ese estudiante
+-    // queda permitido más abajo.
+-    function hasErasureLog(schoolId, studentId) {
+-      return studentId is string && studentId.size() > 0
+-          && exists(/databases/$(database)/documents/schools/$(schoolId)/erasureLog/$(studentId));
+-    }
+-
+-    // ═══════════════════════════════════════════════════════════════════
+-    //  ÁRBOL MULTI-TENANT
+-    // ═══════════════════════════════════════════════════════════════════
+-    match /schools/{schoolId} {
+-
+-      allow read:   if belongsTo(schoolId);
+-      allow write:  if false;   // el documento raíz del colegio se gestiona fuera de la app
+-
+-      // ─── FICHAS DE ESTUDIANTES ─────────────────────────────────────────
+-      // La baja normal es el archivado lógico (motivo obligatorio y
+-      // autoría), no el borrado. El borrado real existe solo para el
+-      // derecho de eliminación (ver erasureLog más abajo): SuperAdmin,
+-      // y solo con el motivo ya registrado.
+-      match /students/{studentId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data);
+-
+-        // Dos formas legítimas de update:
+-        //  (a) archivado lógico, que exige motivo no vacío;
+-        //  (b) edición ordinaria de la ficha, que NO puede tocar el archivado.
+-        allow update: if canWrite(schoolId)
+-                      && updateAuthoredByCaller()
+-                      && (
+-                        // (a) archivar
+-                        (
+-                          request.resource.data.isArchived == true
+-                          && 'archivedReason' in request.resource.data
+-                          && request.resource.data.archivedReason is string
+-                          && request.resource.data.archivedReason.size() >= 3
+-                          && request.resource.data.archivedReason.size() <= 300
+-                          && 'archivedBy' in request.resource.data
+-                          && request.resource.data.archivedBy.uid == request.auth.uid
+-                          && onlyChanges(['isArchived','archivedReason','archivedAt','archivedBy','updatedAt','updatedBy'])
+-                        )
+-                        ||
+-                        // (b) editar la ficha sin alterar el estado de archivado
+-                        (
+-                          !onlyChanges(['isArchived','archivedReason','archivedAt','archivedBy','updatedAt','updatedBy'])
+-                          && request.resource.data.get('isArchived', false) == resource.data.get('isArchived', false)
+-                          && request.resource.data.createdBy == resource.data.createdBy
+-                        )
+-                        ||
+-                        // (c) backfill de claves foráneas (migración histórica)
+-                        (
+-                          isSuperAdmin()
+-                          && onlyChanges(['studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy'])
+-                        )
+-                      );
+-
+-        // 🔒 Solo SuperAdmin, y solo con el motivo ya registrado en
+-        // erasureLog para ESTE estudiante (derecho de eliminación, LOPDP).
+-        // Ningún otro rol puede borrar una ficha, nunca.
+-        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, studentId);
+-      }
+-
+-      // ─── ATENCIONES ────────────────────────────────────────────────────
+-      // Append-only. Lo único mutable es la confirmación familiar y el
+-      // enlace de clave foránea añadido por la migración.
+-      match /careRecords/{recordId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data);
+-        allow update: if canWrite(schoolId)
+-                      && updateAuthoredByCaller()
+-                      && request.resource.data.createdBy == resource.data.createdBy
+-                      && request.resource.data.createdAt == resource.data.createdAt
+-                      && (
+-                        onlyChanges(['family','updatedAt','updatedBy'])
+-                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+-                      );
+-        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+-        // estudiante de ESTE registro (resource.data: el documento previo
+-        // al borrado). Sin studentId (registro huérfano nunca enlazado) no
+-        // hay forma de que exista el log correspondiente: queda protegido
+-        // por defecto, no expuesto por descuido.
+-        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+-      }
+-
+-      // ─── ALERTAS ───────────────────────────────────────────────────────
+-      match /alerts/{alertId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data)
+-                      && request.resource.data.status == 'pending';
+-        allow update: if canWrite(schoolId)
+-                      && request.resource.data.createdBy == resource.data.createdBy
+-                      && request.resource.data.createdAt == resource.data.createdAt
+-                      && (
+-                        onlyChanges([
+-                          'status','attendedAt','attendedTimeLabel','attendedBy',
+-                          'familyConfirmedAt','familyReadTimeLabel','familyConfirmedBy',
+-                          'careRecordId','updatedAt','updatedBy'
+-                        ])
+-                        || (isSuperAdmin() && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']))
+-                      );
+-        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+-        // estudiante de esta alerta.
+-        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+-      }
+-
+-      // ─── INVENTARIO ────────────────────────────────────────────────────
+-      // El stock sí se corrige (es un conteo físico), pero cada movimiento
+-      // deja rastro inmutable en inventoryLog.
+-      match /inventory/{itemId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data);
+-        allow update: if canWrite(schoolId)
+-                      && request.resource.data.createdBy == resource.data.createdBy;
+-        allow delete: if false;
+-      }
+-
+-      // ─── TRAZABILIDAD DE INSUMOS ───────────────────────────────────────
+-      // Entrega de medicación: sello de tiempo y responsable obligatorios,
+-      // y absolutamente inmutable salvo el enlace de la migración.
+-      match /inventoryLog/{logId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data);
+-        allow update: if isSuperAdmin()
+-                      && onlyChanges(['studentId','studentName','studentLinkStatus','studentLinkStatus','studentLinkedAt','studentLinkedBy','updatedAt','updatedBy']);
+-        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+-        // estudiante de este movimiento.
+-        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+-      }
+-
+-      // ─── VACUNAS ───────────────────────────────────────────────────────
+-      match /vaccines/{vaccineId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow create: if canWrite(schoolId)
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data);
+-        allow update: if canWrite(schoolId)
+-                      && request.resource.data.createdBy == resource.data.createdBy;
+-        // Solo SuperAdmin, y solo con erasureLog ya registrado para el
+-        // estudiante de este registro de vacunación.
+-        allow delete: if isSuperAdmin() && hasErasureLog(schoolId, resource.data.get('studentId', null));
+-      }
+-
+-      // ─── REGISTRO DE ELIMINACIÓN (derecho de eliminación · LOPDP) ───────
+-      // Un documento por estudiante, con studentId como ID del documento
+-      // (hasErasureLog() lo busca por ese path directamente). Create-only:
+-      // nunca se actualiza ni se borra, así que sigue existiendo como
+-      // prueba incluso después de que el resto de los datos del estudiante
+-      // se haya borrado. Solo SuperAdmin — ni Admin_Colegio ni
+-      // Personal_Salud pueden solicitar ni registrar una eliminación.
+-      match /erasureLog/{studentId} {
+-        allow read:   if isSuperAdmin();
+-        allow create: if isSuperAdmin()
+-                      && authoredByCaller(request.resource.data)
+-                      && sanePastTimestamp(request.resource.data)
+-                      && request.resource.data.studentId == studentId
+-                      && request.resource.data.reason is string
+-                      && request.resource.data.reason.size() >= 10
+-                      && request.resource.data.reason.size() <= 500;
+-        allow update, delete: if false;
+-      }
+-
+-      // ─── METADATOS OPERATIVOS ──────────────────────────────────────────
+-      // Caso activo y banderas de siembra: coordinación efímera, no historia
+-      // clínica. Se permite sobrescritura, pero solo dentro del tenant.
+-      match /meta/{docId} {
+-        allow read:   if belongsTo(schoolId);
+-        allow write:  if canWrite(schoolId);
+-      }
+-
+-      // Cualquier colección futura queda denegada hasta que se le escriba
+-      // una regla explícita. Añadir datos no debe abrir accesos por descuido.
+-      match /{document=**} {
+-        allow read, write: if false;
+-      }
+-    }
+-  }
+-}
+diff --git a/firestore.rules.test.mjs b/firestore.rules.test.mjs
+index 45fc8d5..28497c9 100644
+--- a/firestore.rules.test.mjs
++++ b/firestore.rules.test.mjs
+@@ -364,6 +364,75 @@ test("un registro huérfano (sin studentId) no se puede borrar aunque haya erasu
+ 
+ // ─── Hallazgo del cruce reglas↔código (ver PLAN_DE_TRABAJO.md) ─────────────
+ 
++/* ══════════════════════════════════════════════════════════════════════
++   V42.0.1 — Pruebas de los huecos cerrados en esta versión.
++   Se añaden JUNTO a la corrección, no después: una regla endurecida sin
++   test que la ejerza es una regla que nadie sabe si sigue vigente.
++   ══════════════════════════════════════════════════════════════════════ */
++
++test("alerts: un update sin updatedBy verificado se deniega (autoría)", async () => {
++  await seed(SCHOOL_A, "alerts/al-auth", { status: "pending", createdAt: Date.now(), createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  // Sin updatedBy: antes se aceptaba, y con ello `attendedBy` era un campo
++  // que el cliente afirmaba sin verificación alguna.
++  await assertFails(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-auth`), {
++      status: "attended", attendedAt: Date.now(), attendedBy: { uid: "otro" }
++    })
++  );
++});
++
++test("alerts: no se puede atribuir la atención a otro uid", async () => {
++  await seed(SCHOOL_A, "alerts/al-suplant", { status: "pending", createdAt: Date.now(), createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  await assertFails(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-suplant`), {
++      status: "attended", attendedAt: Date.now(),
++      updatedAt: new Date(), updatedBy: { uid: "medico-que-no-soy" }
++    })
++  );
++});
++
++test("alerts: no se puede devolver una alerta atendida a 'pending'", async () => {
++  await seed(SCHOOL_A, "alerts/al-estado", { status: "attended", createdAt: Date.now(), createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  // Revertir el estado borraría la medición de tiempo de respuesta.
++  await assertFails(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/alerts/al-estado`), {
++      status: "pending", updatedAt: new Date(), updatedBy: { uid: "health1" }
++    })
++  );
++});
++
++test("inventory: no se puede reescribir el stock sin autor verificado", async () => {
++  await seed(SCHOOL_A, "inventory/med1", { name: "Paracetamol", stock: 10, createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  await assertFails(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med1`), { stock: 999 })
++  );
++});
++
++test("inventory: el descuento de invUse (stock + updatedBy) sigue aceptándose", async () => {
++  await seed(SCHOOL_A, "inventory/med2", { name: "Suero", stock: 10, createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  // Forma exacta que envía sync.js en el writeBatch de invUse.
++  await assertSucceeds(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med2`), {
++      stock: 9, updatedAt: new Date(), updatedBy: { uid: "health1" }
++    })
++  );
++});
++
++test("inventory: un stock negativo se deniega", async () => {
++  await seed(SCHOOL_A, "inventory/med3", { name: "Gasas", stock: 1, createdBy: { uid: "health1" } });
++  const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
++  await assertFails(
++    updateDoc(doc(db, `schools/${SCHOOL_A}/inventory/med3`), {
++      stock: -5, updatedAt: new Date(), updatedBy: { uid: "health1" }
++    })
++  );
++});
++
+ test("BRECHA CONOCIDA (rastreada para V43/A3): update en vaccines no tiene lista de campos permitidos", async () => {
+   await seed(SCHOOL_A, "vaccines/vac1", { studentId: "stu1", createdBy: { uid: "health1" } });
+   const db = ctx("health1", { role: "Personal_Salud", schoolId: SCHOOL_A }).firestore();
+diff --git a/gitignore b/gitignore
+deleted file mode 100644
+index 652a3e6..0000000
+--- a/gitignore
++++ /dev/null
+@@ -1,4 +0,0 @@
+-node_modules/
+-dist/
+-smoke-out/
+-.env
+diff --git a/index.html b/index.html
+index ff0919c..4c1e620 100644
+--- a/index.html
++++ b/index.html
+@@ -11,7 +11,7 @@
+ <meta property="og:title" content="Novimed — Centro de bienestar institucional" />
+ <meta property="og:description" content="Gestión médica escolar con alertas, trazabilidad, familias conectadas y reportes institucionales." />
+ <meta property="og:type" content="website" />
+-<title>Novimed V41 — Centro de bienestar institucional</title>
++<title>Novimed — Centro de bienestar institucional</title>
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+@@ -30,7 +30,16 @@
+       <button type="button" data-page="alertas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nav-label">Centro de alertas</span><span class="pill" id="navAlertPill">3</span></button>
+       <div class="nav-group-label"><span>Gestión estudiantil</span></div>
+       <button type="button" data-page="estudiantes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11l2 2 4-4"/></svg><span class="nav-label">Estudiantes</span></button>
++      <!-- V42.0.1 — P1-3. Atenciones, Riesgo, Vacunas e Inventario existían
++           como páginas pero NO tenían entrada de navegación: solo se
++           alcanzaban desde botones dentro de tarjetas. El registro médico
++           escolar, que es el núcleo clínico y legal del producto, era
++           inencontrable para un usuario nuevo. -->
++      <button type="button" data-page="atenciones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 12v5"/><path d="M9.5 14.5h5"/></svg><span class="nav-label">Atenciones</span></button>
++      <button type="button" data-page="riesgo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="nav-label">Riesgo</span></button>
+       <div class="nav-group-label"><span>Recursos y comunicación</span></div>
++      <button type="button" data-page="vacunas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3a2.4 2.4 0 0 1-3.4 0l-.6-.6a2.4 2.4 0 0 1 0-3.4L15 5Z"/><path d="m9 11 4 4"/></svg><span class="nav-label">Vacunas</span></button>
++      <button type="button" data-page="inventario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg><span class="nav-label">Medicamentos</span></button>
+       <button type="button" data-page="familias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg><span class="nav-label">Familias</span></button>
+       <button type="button" data-page="reportes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 14v3"/><path d="M12 10v7"/><path d="M17 6v11"/></svg><span class="nav-label">Reportes</span></button>
+       <div class="nav-group-label"><span>Simulación y sistema</span></div>
+@@ -175,7 +184,7 @@
+   </main>
+ </div>
+ 
+-<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><select id="reportStudent"></select></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" placeholder="Ej. Aula 6B · 2° piso"></div></div><div class="field" id="reportStudentOtherField" style="display:none"><label for="reportStudentOther">Nombre del estudiante no registrado</label><input id="reportStudentOther" placeholder="Nombre y apellidos"><p class="field-hint">Esta alerta quedará marcada como <b>no enlazada a ficha</b>: el personal de salud no podrá ver alergias ni antecedentes.</p></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms" placeholder="Describe lo que observas: inicio, síntomas, estado del estudiante"></textarea></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
++<div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal-box"><h3 id="reportModalTitle">Reportar emergencia desde el aula</h3><p>Vista de docente. Esta acción crea una alerta visible para enfermería.</p><div class="form-grid"><div class="field"><label for="reportStudent">Estudiante</label><select id="reportStudent"></select></div><div class="field"><label for="reportRoom">Ubicación</label><input id="reportRoom" placeholder="Ej. Aula 6B · 2° piso"></div></div><div class="field" id="reportStudentOtherField" style="display:none"><label for="reportStudentOther">Nombre del estudiante no registrado</label><input id="reportStudentOther" placeholder="Nombre y apellidos"><p class="field-hint">Esta alerta quedará marcada como <b>no enlazada a ficha</b>: el personal de salud no podrá ver alergias ni antecedentes.</p></div><div class="field"><label for="reportSymptoms">Síntomas observados</label><textarea id="reportSymptoms" placeholder="Describe lo que observas: inicio, síntomas, estado del estudiante"></textarea></div><div class="field"><label for="reportPriority">Prioridad</label><select id="reportPriority"><option value="Alta">Alta — dificultad para respirar, pérdida de consciencia, sangrado que no cede, reacción alérgica, convulsión</option><option value="Media" selected>Media — dolor persistente, golpe con hinchazón, fiebre, vómito, malestar que no mejora en el aula</option><option value="Baja">Baja — raspón, dolor de cabeza leve, malestar pasajero, curación de rutina</option></select><p class="field-hint">El criterio está escrito junto a cada opción para no tener que interpretarlo bajo presión.</p></div><div class="modal-actions"><button type="button" class="btn secondary" onclick="closeModal('reportModal')">Cancelar</button><button type="button" class="btn primary" onclick="submitTeacherAlert()">Enviar alerta médica</button></div></div></div>
+ <div class="modal" id="fichaModal" role="dialog" aria-modal="true" aria-labelledby="fichaModalTitle">
+   <div class="modal-box">
+     <h3 id="fichaModalTitle">Ficha médica estudiantil</h3>
+diff --git a/package.json b/package.json
+index c6bd632..3cc557d 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "novimed",
+   "private": true,
+-  "version": "41.1.0",
++  "version": "42.0.1",
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
+diff --git a/smoke-test.js b/smoke-test.js
+deleted file mode 100644
+index fcd4ec2..0000000
+--- a/smoke-test.js
++++ /dev/null
+@@ -1,340 +0,0 @@
+-#!/usr/bin/env node
+-/**
+- * NOVIMED — smoke test de navegador real contra los emuladores locales.
+- *
+- * NUNCA apunta al proyecto Firebase real: exige VITE_USE_EMULATOR=true
+- * (activado por firebase.json + sync.js) y usa firebase-admin apuntado a
+- * los emuladores (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST)
+- * para sembrar datos de prueba. Pensado para correr dentro de
+- * `firebase emulators:exec "node smoke-test.mjs"` (ver
+- * package.json → test:smoke), que levanta y apaga los emuladores solo.
+- *
+- * Dos escenarios:
+- *  1. Demo (eight-demo, self-seed): confirma que el guion de ventas de
+- *     Sofía Martínez sigue intacto tras V42.0 (ROADMAP_V42.md §5, riesgo
+- *     "la demo depende del teatro de active-case").
+- *  2. Institución real con una alerta pendiente real: confirma el criterio
+- *     de aceptación de V42.0 — con `meta/active-case` borrado y la página
+- *     recargada desde cero (sin nada en memoria), el panel principal sigue
+- *     mostrando la alerta correcta porque la lee de la cola `alerts`, no
+- *     del documento único.
+- */
+-import { spawn, execSync } from "node:child_process";
+-import { mkdirSync } from "node:fs";
+-import { chromium } from "playwright";
+-
+-/* Las capturas iban a `scripts/`, un directorio que no existe en el repo:
+-   page.screenshot() lanzaba ENOENT y abortaba la corrida DESPUÉS de que el
+-   escenario ya había pasado. Se escribe en un directorio propio que el
+-   test crea, para que la salida no dependa del layout del repositorio. */
+-const SHOT_DIR = "smoke-out";
+-mkdirSync(SHOT_DIR, { recursive: true });
+-
+-const PORT = 5183;
+-const BASE_URL = `http://127.0.0.1:${PORT}`;
+-const PROJECT_ID = "demo-novimed";
+-const SCHOOL_ID = "colegio-test";
+-const TEST_EMAIL = "salud@colegio-test.local";
+-const TEST_PASSWORD = "clave-de-prueba-123";
+-
+-process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+-process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+-process.env.GCLOUD_PROJECT = PROJECT_ID;
+-
+-function waitForServer(url, timeoutMs) {
+-  const deadline = Date.now() + timeoutMs;
+-  return new Promise((resolve, reject) => {
+-    (function tick() {
+-      fetch(url).then(() => resolve()).catch(() => {
+-        if (Date.now() > deadline) reject(new Error(`Timeout esperando ${url}`));
+-        else setTimeout(tick, 300);
+-      });
+-    })();
+-  });
+-}
+-
+-/* Un vite huérfano de una corrida anterior (matada por el timeout externo
+-   antes de que su propio `finally` corriera) puede seguir vivo en el mismo
+-   puerto: waitForServer() lo aceptaría igual y esta corrida terminaría
+-   probando código/env de la corrida VIEJA sin darse cuenta. Se limpia el
+-   puerto antes de arrancar el vite de esta corrida. */
+-function killStalePort(port) {
+-  try { execSync(`fuser -k ${port}/tcp`, { stdio: "ignore" }); } catch {}
+-}
+-
+-async function seedRealTenant() {
+-  const { initializeApp, cert, applicationDefault } = await import("firebase-admin/app");
+-  const { getFirestore, FieldValue } = await import("firebase-admin/firestore");
+-  const { getAuth } = await import("firebase-admin/auth");
+-
+-  initializeApp({ projectId: PROJECT_ID });
+-  const db = getFirestore();
+-  const auth = getAuth();
+-
+-  const user = await auth.createUser({ email: TEST_EMAIL, password: TEST_PASSWORD });
+-  await auth.setCustomUserClaims(user.uid, { role: "Personal_Salud", schoolId: SCHOOL_ID });
+-
+-  const root = db.collection("schools").doc(SCHOOL_ID);
+-  const studentRef = root.collection("students").doc();
+-  await studentRef.set({
+-    fullName: "Ana Real",
+-    createdAt: Date.now(),
+-    createdBy: { uid: user.uid, email: TEST_EMAIL, role: "Personal_Salud" }
+-  });
+-
+-  const alertRef = root.collection("alerts").doc();
+-  const alertData = {
+-    studentId: studentRef.id,
+-    studentName: "Ana Real",
+-    location: "Aula 4B",
+-    symptoms: "Caída en el patio, dolor en el brazo",
+-    priority: "Alta",
+-    status: "pending",
+-    timeLabel: "11:15",
+-    createdAt: Date.now(),
+-    createdBy: { uid: user.uid, email: TEST_EMAIL, role: "Personal_Salud" }
+-  };
+-  await alertRef.set(alertData);
+-
+-  const caseRef = root.collection("meta").doc("active-case");
+-  await caseRef.set({
+-    studentId: studentRef.id,
+-    studentName: "Ana Real",
+-    status: "alert_pending",
+-    alertId: alertRef.id,
+-    location: "Aula 4B",
+-    symptoms: "Caída en el patio, dolor en el brazo",
+-    alertTimeLabel: "11:15",
+-    updatedAt: FieldValue.serverTimestamp()
+-  });
+-
+-  return { db, caseRef, studentName: "Ana Real" };
+-}
+-
+-async function main() {
+-  // Salvavidas: el transporte long-polling de Firestore (ARCHITECTURE.md
+-  // §5, deliberado para Safari/redes escolares) mantiene actividad de red
+-  // casi continua, así que cualquier espera basada en "networkidle" puede
+-  // colgarse. Si el script entero se cuelga por otra causa, que truene con
+-  // un mensaje claro en vez de que alguien tenga que matarlo a mano.
+-  const watchdog = setTimeout(() => {
+-    console.error("✖ Watchdog: el smoke test no terminó en 150s. Abortando.");
+-    process.exit(1);
+-  }, 150000);
+-  watchdog.unref?.();
+-
+-  console.log("→ Sembrando institución real en el emulador (colegio-test)…");
+-  const { caseRef, studentName } = await seedRealTenant();
+-
+-  killStalePort(PORT);
+-  console.log("→ Arrancando vite dev en modo emulador…");
+-  const vite = spawn("npx", ["vite", "--port", String(PORT), "--strictPort"], {
+-    // VITE_FIREBASE_PROJECT_ID debe coincidir con --project de
+-    // `firebase emulators:exec` (PROJECT_ID de este script): con
+-    // --single_project_mode, el emulador sirve un único espacio de datos,
+-    // y el cliente (que sin esta variable cae al `novimed-2c5e9` de
+-    // producción por defecto en sync.js) quedaría leyendo un proyecto
+-    // distinto al que aquí se siembra con firebase-admin — cero datos
+-    // visibles, sin ningún error de permisos que lo delate.
+-    env: { ...process.env, VITE_USE_EMULATOR: "true", VITE_FIREBASE_PROJECT_ID: PROJECT_ID },
+-    stdio: ["ignore", "pipe", "pipe"]
+-  });
+-  let viteLog = "";
+-  vite.stdout.on("data", (d) => { viteLog += d.toString(); });
+-  vite.stderr.on("data", (d) => { viteLog += d.toString(); });
+-  let browserRef = null;
+-  const cleanup = () => {
+-    try { vite.kill(); } catch {}
+-    try { browserRef?.process()?.kill("SIGKILL"); } catch {}
+-  };
+-  process.on("exit", cleanup);
+-
+-  // Ruido conocido, no del código de la app:
+-  //  - Google Fonts: bloqueado por la política de red de este sandbox.
+-  //  - Canal long-polling de Firestore (google.firestore.v1.Firestore/…):
+-  //    ARCHITECTURE.md §5 documenta que este transporte "mantiene actividad
+-  //    de red casi continua" por diseño (es el motivo por el que se usa,
+-  //    en vez de WebChannel, para sobrevivir a redes que cortan conexiones
+-  //    persistentes). Un ERR_CONNECTION_RESET/ERR_ABORTED sobre ese canal
+-  //    justo al recargar o cerrar la página es la conexión en vuelo
+-  //    cortándose, no un fallo de la app.
+-  const isKnownNoise = (e) =>
+-    /Download the React DevTools|WebChannelConnection|fonts\.googleapis\.com|fonts\.gstatic\.com|google\.firestore\.v1\.Firestore|net::ERR_CONNECTION_RESET|net::ERR_ABORTED|status of 404/i.test(e);
+-
+-  function watchConsole(page) {
+-    const errors = [];
+-    page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
+-    page.on("pageerror", (err) => errors.push("pageerror: " + err.message));
+-    page.on("requestfailed", (req) => {
+-      errors.push(`requestfailed: ${req.method()} ${req.url()} (${req.failure()?.errorText || "?"})`);
+-    });
+-    page.on("response", (res) => { if (res.status() >= 400) errors.push(`http ${res.status()}: ${res.url()}`); });
+-    return () => errors.filter((e) => !isKnownNoise(e));
+-  }
+-
+-  let browser;
+-  try {
+-    // (browserRef se enlaza justo después de lanzar Chromium, más abajo)
+-    await waitForServer(BASE_URL, 20000);
+-    console.log("→ vite listo. Abriendo Chromium…");
+-    /* Sin PLAYWRIGHT_CHROMIUM_PATH se usa el Chromium que gestiona la propia
+-       Playwright (`npm run test:browsers`), que es lo que funciona en un
+-       equipo normal y en CI. La variable existe solo para entornos donde el
+-       binario vive fuera de la caché de Playwright: fijar una ruta absoluta
+-       en el código hacía que este test solo pudiera correr en la máquina
+-       donde se escribió. */
+-    const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+-    browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {});
+-    browserRef = browser;
+-
+-    // Contextos separados por escenario: son "dos dispositivos distintos"
+-    // (localStorage/IndexedDB aislados). Compartir un mismo contexto haría
+-    // que la sesión anónima de la demo contaminara la sesión real, o
+-    // viceversa — el mismo tipo de aislamiento que el propio Novimed exige
+-    // entre tenants (ARCHITECTURE.md §5, caché local por institución).
+-
+-    // ── Escenario 1: demo (eight-demo) ──────────────────────────────────
+-    const demoCtx = await browser.newContext();
+-    const demoPage = await demoCtx.newPage();
+-    const demoErrors = watchConsole(demoPage);
+-    await demoPage.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+-    console.log("→ [demo] Entrando como 'Explorar demo' (tenant eight-demo)…");
+-    await demoPage.click("#authDemoBtn");
+-    await demoPage.waitForSelector("#authGate", { state: "hidden", timeout: 20000 });
+-    await demoPage.waitForFunction(
+-      () => document.getElementById("mainStudentName")?.textContent?.trim().length > 0,
+-      { timeout: 20000 }
+-    );
+-    const demoHero = await demoPage.textContent("#mainStudentName");
+-    const demoKpi = await demoPage.textContent("#kpiAlerts");
+-    await demoPage.screenshot({ path: `${SHOT_DIR}/smoke-demo.png`, fullPage: true });
+-    console.log(`  [demo] mainStudentName="${demoHero}" kpiAlerts="${demoKpi}"`);
+-    await demoPage.close();
+-    await demoCtx.close();
+-
+-    if (demoHero.trim() !== "Sofía Martínez") {
+-      throw new Error(`[demo] Se esperaba "Sofía Martínez" (guion de ventas intacto), se obtuvo "${demoHero}". `
+-        + `V42.0 rompió el guion de la demo — ver ROADMAP_V42.md §5.`);
+-    }
+-
+-    // ── Escenario 2: institución real, alerta pendiente real ────────────
+-    const realCtx = await browser.newContext();
+-    const realPage = await realCtx.newPage();
+-    const realErrors = watchConsole(realPage);
+-    await realPage.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+-    console.log("→ [real] Ingresando con cuenta real de colegio-test…");
+-    await realPage.fill("#authEmail", TEST_EMAIL);
+-    await realPage.fill("#authPass", TEST_PASSWORD);
+-    await realPage.click("#authLoginBtn");
+-    await realPage.waitForSelector("#authGate", { state: "hidden", timeout: 20000 });
+-    console.log("  [real] authGate oculto (login OK). Esperando que el héroe muestre la alerta…");
+-    try {
+-      await realPage.waitForFunction(
+-        (name) => document.getElementById("mainStudentName")?.textContent?.trim() === name,
+-        studentName,
+-        { timeout: 20000 }
+-      );
+-    } catch (waitErr) {
+-      const diag = await realPage.evaluate(() => ({
+-        mainStudentName: document.getElementById("mainStudentName")?.textContent,
+-        syncStatus: window.novimedSyncStatus,
+-        cloudReady: window.novimedCloudReady,
+-        activeAlertId: window.novimedState?.activeAlertId,
+-        alertsLen: Array.isArray(window.novimedState?.alerts) ? window.novimedState.alerts.length : "no-array",
+-        alertsSample: (window.novimedState?.alerts || []).slice(0, 3),
+-        currentAlert: window.novimedState?.currentAlert,
+-        alertSent: window.novimedState?.alertSent
+-      }));
+-      console.error("  [real] DIAGNÓSTICO al fallar el héroe:", JSON.stringify(diag, null, 2));
+-      console.error("  [real] Errores de consola capturados hasta ahora:", JSON.stringify(realErrors(), null, 2));
+-      throw waitErr;
+-    }
+-    const beforeHero = await realPage.textContent("#mainStudentName");
+-    console.log(`  [real] Con active-case presente → mainStudentName="${beforeHero}"`);
+-
+-    console.log("→ [real] Borrando meta/active-case a mano en el emulador (criterio de aceptación V42.0)…");
+-    await caseRef.delete();
+-    await realPage.reload({ waitUntil: "domcontentloaded" });
+-    // Recarga completa: no queda nada en memoria. Si esto resuelve, es
+-    // porque activeAlert() lo sacó de la cola `alerts`, no del documento.
+-    // La sesión de Firebase Auth persiste en IndexedDB entre recargas
+-    // (ARCHITECTURE.md §6, mismo mecanismo documentado para la sesión
+-    // anónima): authGate ya está oculto de entrada, no hace falta volver
+-    // a llenar el formulario de login.
+-    console.log("→ [real] Esperando a que la sesión se reanude sola tras la recarga…");
+-    await realPage.waitForSelector("#authGate", { state: "hidden", timeout: 20000 });
+-    // Espera el valor CORRECTO, no "cualquier texto": justo tras la recarga
+-    // el primer render es neutro (antes de que el listener de `alerts` se
+-    // conecte y aporte el dato), y ese neutro también tiene texto no vacío.
+-    try {
+-      await realPage.waitForFunction(
+-        (name) => document.getElementById("mainStudentName")?.textContent?.trim() === name,
+-        studentName,
+-        { timeout: 20000 }
+-      );
+-    } catch (waitErr) {
+-      const diag = await realPage.evaluate(() => ({
+-        mainStudentName: document.getElementById("mainStudentName")?.textContent,
+-        syncStatus: window.novimedSyncStatus,
+-        cloudReady: window.novimedCloudReady,
+-        activeAlertId: window.novimedState?.activeAlertId,
+-        alertsLen: Array.isArray(window.novimedState?.alerts) ? window.novimedState.alerts.length : "no-array",
+-        alertsSample: (window.novimedState?.alerts || []).slice(0, 3),
+-        currentAlert: window.novimedState?.currentAlert,
+-        alertSent: window.novimedState?.alertSent
+-      }));
+-      console.error("  [real] DIAGNÓSTICO tras recarga:", JSON.stringify(diag, null, 2));
+-      console.error("  [real] Errores de consola:", JSON.stringify(realErrors(), null, 2));
+-      throw waitErr;
+-    }
+-    const afterHero = await realPage.textContent("#mainStudentName");
+-    const afterMeta = await realPage.textContent("#mainStudentMeta");
+-    await realPage.screenshot({ path: `${SHOT_DIR}/smoke-real-after-delete.png`, fullPage: true });
+-    console.log(`  [real] Sin active-case, tras recarga → mainStudentName="${afterHero}" mainStudentMeta="${afterMeta}"`);
+-    await realPage.close();
+-    await realCtx.close();
+-
+-    if (afterHero.trim() !== studentName) {
+-      throw new Error(`[real] CRITERIO DE ACEPTACIÓN V42.0 NO CUMPLIDO: con active-case borrado y `
+-        + `la página recargada, se esperaba "${studentName}" y se obtuvo "${afterHero}".`);
+-    }
+-
+-    const badConsole = [...demoErrors(), ...realErrors()];
+-    if (badConsole.length) {
+-      throw new Error("Errores de consola durante la carga:\n  " + badConsole.join("\n  "));
+-    }
+-
+-    console.log("\n✅ Smoke test OK:");
+-    console.log("   - Demo eight-demo: el guion de ventas de Sofía Martínez sigue intacto.");
+-    console.log("   - Institución real: la alerta pendiente se ve con active-case presente");
+-    console.log("     Y sigue viéndose igual después de borrar active-case y recargar la página");
+-    console.log("     desde cero — el héroe ya no depende de ese documento único (V42.0).");
+-  } finally {
+-    // browser.close() puede colgarse tras una página en mal estado (se
+-    // observó en la práctica: deja el emulador y vite vivos para siempre,
+-    // rompiendo la siguiente corrida por puerto ocupado). Con carrera
+-    // contra un timeout y un kill duro de respaldo, cleanup() SIEMPRE se
+-    // ejecuta.
+-    if (browser) {
+-      await Promise.race([
+-        browser.close().catch(() => {}),
+-        new Promise((r) => setTimeout(r, 8000))
+-      ]);
+-    }
+-    cleanup();
+-  }
+-}
+-
+-main()
+-  .catch((err) => {
+-    console.error("\n✖ Smoke test falló:", err.message || err);
+-    process.exitCode = 1;
+-  })
+-  .finally(() => {
+-    // Se observó en la práctica: incluso tras cerrar vite y Chromium,
+-    // algún handle (WebChannel/long-polling de Firestore, típicamente)
+-    // puede dejar el proceso vivo indefinidamente en vez de drenar solo.
+-    // Salida explícita: el resultado ya se imprimió y process.exitCode
+-    // ya está fijado arriba si algo falló.
+-    process.exit(process.exitCode || 0);
+-  });
+diff --git a/smoke-test.mjs b/smoke-test.mjs
+index 263edda..fcd4ec2 100644
+--- a/smoke-test.mjs
++++ b/smoke-test.mjs
+@@ -6,7 +6,7 @@
+  * (activado por firebase.json + sync.js) y usa firebase-admin apuntado a
+  * los emuladores (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST)
+  * para sembrar datos de prueba. Pensado para correr dentro de
+- * `firebase emulators:exec "node scripts/smoke-test.mjs"` (ver
++ * `firebase emulators:exec "node smoke-test.mjs"` (ver
+  * package.json → test:smoke), que levanta y apaga los emuladores solo.
+  *
+  * Dos escenarios:
+@@ -20,8 +20,16 @@
+  *     del documento único.
+  */
+ import { spawn, execSync } from "node:child_process";
++import { mkdirSync } from "node:fs";
+ import { chromium } from "playwright";
+ 
++/* Las capturas iban a `scripts/`, un directorio que no existe en el repo:
++   page.screenshot() lanzaba ENOENT y abortaba la corrida DESPUÉS de que el
++   escenario ya había pasado. Se escribe en un directorio propio que el
++   test crea, para que la salida no dependa del layout del repositorio. */
++const SHOT_DIR = "smoke-out";
++mkdirSync(SHOT_DIR, { recursive: true });
++
+ const PORT = 5183;
+ const BASE_URL = `http://127.0.0.1:${PORT}`;
+ const PROJECT_ID = "demo-novimed";
+@@ -169,7 +177,14 @@ async function main() {
+     // (browserRef se enlaza justo después de lanzar Chromium, más abajo)
+     await waitForServer(BASE_URL, 20000);
+     console.log("→ vite listo. Abriendo Chromium…");
+-    browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
++    /* Sin PLAYWRIGHT_CHROMIUM_PATH se usa el Chromium que gestiona la propia
++       Playwright (`npm run test:browsers`), que es lo que funciona en un
++       equipo normal y en CI. La variable existe solo para entornos donde el
++       binario vive fuera de la caché de Playwright: fijar una ruta absoluta
++       en el código hacía que este test solo pudiera correr en la máquina
++       donde se escribió. */
++    const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
++    browser = await chromium.launch(chromiumPath ? { executablePath: chromiumPath } : {});
+     browserRef = browser;
+ 
+     // Contextos separados por escenario: son "dos dispositivos distintos"
+@@ -192,7 +207,7 @@ async function main() {
+     );
+     const demoHero = await demoPage.textContent("#mainStudentName");
+     const demoKpi = await demoPage.textContent("#kpiAlerts");
+-    await demoPage.screenshot({ path: "scripts/smoke-demo.png", fullPage: true });
++    await demoPage.screenshot({ path: `${SHOT_DIR}/smoke-demo.png`, fullPage: true });
+     console.log(`  [demo] mainStudentName="${demoHero}" kpiAlerts="${demoKpi}"`);
+     await demoPage.close();
+     await demoCtx.close();
+@@ -274,7 +289,7 @@ async function main() {
+     }
+     const afterHero = await realPage.textContent("#mainStudentName");
+     const afterMeta = await realPage.textContent("#mainStudentMeta");
+-    await realPage.screenshot({ path: "scripts/smoke-real-after-delete.png", fullPage: true });
++    await realPage.screenshot({ path: `${SHOT_DIR}/smoke-real-after-delete.png`, fullPage: true });
+     console.log(`  [real] Sin active-case, tras recarga → mainStudentName="${afterHero}" mainStudentMeta="${afterMeta}"`);
+     await realPage.close();
+     await realCtx.close();
+diff --git a/sync.js b/sync.js
+index 72a1eb1..4a8d3cc 100644
+--- a/sync.js
++++ b/sync.js
+@@ -270,6 +270,7 @@ async function processQueue(trigger, force){
+   const due = pendingOps.filter(o => o.status === "pending" && (force || o.nextAt <= now));
+   if(!due.length) return;
+   queueRunning = true;
++  try{
+   for(const op of due){
+     const exec = queueExecutors[op.type];
+     if(!exec){ op.status = "done"; continue; }
+@@ -292,10 +293,15 @@ async function processQueue(trigger, force){
+       }
+     }
+   }
+-  pendingOps = pendingOps.filter(o => o.status !== "done");
+-  saveQueue(pendingOps);
+-  queueRunning = false;
+-  safeRender();
++  }finally{
++    /* Sin este finally, una excepción inesperada dejaba queueRunning en true
++       y la cola offline bloqueada para el resto de la sesión: los cambios
++       pendientes no se reintentaban nunca más. */
++    pendingOps = pendingOps.filter(o => o.status !== "done");
++    saveQueue(pendingOps);
++    queueRunning = false;
++    safeRender();
++  }
+ }
+ window.novimedProcessQueueNow = (force) => processQueue("manual", force === true);
+ window.novimedQueueSnapshot = () => pendingOps.map(o => ({ type: o.type, attempts: o.attempts, status: o.status }));
+@@ -481,7 +487,7 @@ function attachCollectionListeners(){
+   const asObj = d => { const x = d.data(); return (x && typeof x === "object") ? { id: d.id, ...x } : null; };
+   bind("students", "asc", d => { const o = asObj(d); if(o){ o.fullName = String(o.fullName || "Estudiante sin nombre"); o.isArchived = o.isArchived === true; } return o; }, true);
+   bind("inventory", "asc", d => { const o = asObj(d); if(o){ o.name = String(o.name || "Ítem"); o.stock = Number.isFinite(Number(o.stock)) ? Number(o.stock) : 0; } return o; }, true);
+-  bind("vaccines", "asc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; } return o; }, false);
++  bind("vaccines", "asc", d => { const o = asObj(d); if(o){ o.studentName = o.studentName || o.student || "Sin especificar"; o.studentId = o.studentId || null; o.status = String(o.status || "Sin registrar"); } return o; }, false);
+   /* V41 — `student` (nombre suelto) sobrevive en documentos anteriores a la
+      migración. Se normaliza en lectura a studentName para que la UI tenga un
+      único campo de presentación, sin reescribir el histórico. */
+@@ -638,7 +644,12 @@ function mapFirestoreToLocalState(data){
+       data.attentionTimeLabel || "Ahora",
+       "blue",
+       "Departamento médico notificado",
+-      "Andrés Sánchez recibió alerta y consultó la ficha médica"
++      /* V42.0.1 — P0-2. Aquí se escribía "Andrés Sánchez" fijo, en TODA
++         institución. Con autoría real disponible desde V41, el feed usa
++         quien de verdad ejecutó el acto, o declara que no consta. */
++      (data.updatedBy && (data.updatedBy.email || data.updatedBy.role))
++        ? (data.updatedBy.email || data.updatedBy.role) + " recibió la alerta"
++        : "Recibida por el departamento de salud"
+     ]);
+     activities.push([
+       data.attentionTimeLabel || "Ahora",
+@@ -659,7 +670,9 @@ function mapFirestoreToLocalState(data){
+       data.attentionTimeLabel || "Ahora",
+       "amber",
+       "Familia notificada",
+-      familyRead ? "Ana Martínez confirmó lectura" : "Ana Martínez pendiente de lectura"
++      /* V42.0.1 — P0-2. "Ana Martínez" era el contacto del guion demo,
++         mostrado como hecho en cualquier colegio. */
++      familyRead ? "Lectura confirmada por la familia" : "Pendiente de confirmación de la familia"
+     ]);
+   }
+ 
+@@ -668,7 +681,7 @@ function mapFirestoreToLocalState(data){
+       data.familyReadTimeLabel || "Ahora",
+       "amber",
+       "Familia confirmó lectura",
+-      "Ana Martínez recibió la información"
++      "La familia registró haber recibido la información"
+     ]);
+   }
+ 
+@@ -751,7 +764,8 @@ window.submitTeacherAlert = async function(payload){
+       studentUnlinked: !form.studentId,
+       location: form.location,
+       symptoms: form.symptoms,
+-      priority: "Alta",
++      /* V42.0.1 — P1-2: prioridad real elegida al reportar, ya no constante. */
++      priority: ["Alta","Media","Baja"].includes(form.priority) ? form.priority : "Media",
+       status: "pending",
+       timeLabel: currentTimeLabel(),
+       createdAt: Date.now(),
+@@ -797,7 +811,15 @@ window.submitCare = async function(){
+   const presumptiveDiagnosis = document.getElementById("carePresumptiveDiagnosis")?.value || "Sin especificar";
+   const actionDone = document.getElementById("careActionDone")?.value || "Sin especificar";
+ 
+-  window.novimedSubmitCareLocal?.();
++  /* V42.0.1 — P0-4. Antes se llamaba SIN await: linkedCareRecordId lo
++     asigna el .then() de novimedCloudAddCareRecord, así que cuando se
++     escribía `careRecordId` unas líneas más abajo el addDoc casi nunca
++     había resuelto y el enlace se persistía como null. El FK que V41
++     introdujo para no escribir sobre careRecords[0] quedaba vacío en
++     Firestore y se perdía al recargar — justo el criterio que V42 dice
++     cumplir. Ahora se espera a que la atención exista antes de enlazarla. */
++  try{ await window.novimedSubmitCareLocal?.(); }
++  catch(e){ console.error("Registro local de la atención:", e); }
+   if(!cloudSessionReady) return; /* sin sesión: solo local */
+ 
+   try{
